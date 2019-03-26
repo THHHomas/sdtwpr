@@ -5,8 +5,10 @@ import numpy as np
 import random
 import time
 from resnet import resnet50
-from triplet_loss import triplet_hard_loss
+from triplet_loss import hard_sdtw_triplet
 from torch.autograd import Variable
+
+import cv2
 
 import tensorflow as tf
 import keras
@@ -32,7 +34,7 @@ from numpy.random import randint, shuffle, choice
 
 batch_num=0
 SN = 4 # the number of images in a class
-PN = 18
+PN = 16
 input_shape=(384,128,3)
 
 def mix_data_prepare(data_list_path, train_dir_path):
@@ -83,6 +85,19 @@ def reid_data_prepare(data_list_path, train_dir_path):
 
     return class_img_labels
 
+def load_and_process(pre_image):
+    img = cv2.imread(pre_image)
+    img = cv2.resize(img, (input_shape[1], input_shape[0]))
+
+    
+
+    img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+    img = img/255.0
+
+    img = img - np.array([0.485, 0.456, 0.406])
+    img = img/np.array([0.229, 0.224, 0.225])
+
+    return img
 
 #def random_crop(image, crop_size):
 #    w=np.random.randint(256-crop_size)   
@@ -103,13 +118,19 @@ def triplet_hard_generator(class_img_labels, batch_size, train=False):
             for j in range(SN):
                 pre_image = class_img_labels[str(pre_label[i])][
                                    choice(len_pre_label_i)]
-                img = image.load_img(pre_image, target_size=[input_shape[0], input_shape[1]])
-                
+                '''img = image.load_img(pre_image, target_size=[input_shape[0], input_shape[1]])
                 img = image.img_to_array(img)
+                img = preprocess_input(img)
+                cv2.imshow("pre", img)
+                cv2.waitKey(1000)
+                '''
+                img = load_and_process(pre_image).astype(np.float32)
+                
+
                 
                 #img=random_crop(img, 224)
-                img = np.expand_dims(img, axis=0)
-                img = preprocess_input(img)[0]
+                
+                #img = preprocess_input(img)[0]
                 
                 #if random.random()>0.5:
                 #    img = img[:,::-1,:]
@@ -142,10 +163,10 @@ reduce_lr = LearningRateScheduler(common_lr)
 def adjust_learning_rate(optimizer, epoch):
     """Sets the learning rate to the initial LR decayed by 10 every 30 epochs"""
     for param_group in optimizer.param_groups:
-        if epoch< 65:
-            param_group['lr'] = 3e-4#$param_group['lr']*(0.1 ** (epoch // 30))
-        elif epoch < 100:
-            param_group['lr']=1e-4
+        if epoch< 100:
+            param_group['lr'] = 1e-3#$param_group['lr']*(0.1 ** (epoch // 30))
+        elif epoch < 180:
+            param_group['lr']=3e-4
         else:
             param_group['lr']=3e-5
 
@@ -155,18 +176,18 @@ def pair_tune(source_model_path, train_generator, tune_dataset, batch_size=72, n
     device=torch.device("cuda")
     model = resnet50(True)
     model.to(device)
+    #model = torch.load("./source_market_model.h5")
 
-    num_epochs = 150
+    num_epochs = 220
     batch_size = PN*SN
-    
+
     f=open("./log.txt", "w")
-    learning_rate = 3e-4
-    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
-    fc1 = nn.Linear(2048, 1024).to(device)
-    fc2 = nn.Linear(1024, 128).to(device)
-    batchNorm = nn.BatchNorm1d(1024).to(device)
+    learning_rate = 1e-3
+    optimizer = torch.optim.Adam(model.parameters(), betas=(0.9, 0.999), lr=learning_rate, weight_decay=0.0005)
+    downConv = nn.Conv2d(2048, 128, 1).to(device)
+
     for epoch in range(num_epochs):
-        print('Epoch {}/{}'.format(epoch, num_epochs - 1))
+        print('Epoch {}/{}'.format(epoch, num_epochs ))
         since = time.time()
 
         adjust_learning_rate(optimizer, epoch)
@@ -178,13 +199,14 @@ def pair_tune(source_model_path, train_generator, tune_dataset, batch_size=72, n
             data_=train_generator.__next__()    
             inputs=data_[0]
             labels = data_[1]
-            inputs=np.transpose(inputs, (0,3,1, 2))
-            inputs = torch.from_numpy(inputs/255.0)
+            #print(inputs.shape)
+            inputs=np.transpose(inputs, (0,3,1,2))
+            inputs = torch.from_numpy(inputs)
             labels = torch.from_numpy(labels)
             inputs=Variable(inputs, requires_grad=True)
             labels=Variable(labels, requires_grad=True)
             inputs = inputs.to(device)
-            labels = labels.to(device)     
+            labels = labels.to(device)
             
             
             # zero the parameter gradients
@@ -194,11 +216,10 @@ def pair_tune(source_model_path, train_generator, tune_dataset, batch_size=72, n
             # track history if only in train
             with torch.set_grad_enabled(True):
                 outputs = model(inputs)
-                outputs = fc1(outputs)
-                outputs = batchNorm(outputs)
-                outputs = fc2(outputs)
-                loss = triplet_hard_loss(outputs, outputs)
-
+                outputs =  downConv(outputs)
+                #print(outputs.shape)
+                loss = hard_sdtw_triplet(outputs)
+		
                 # backward + optimize only if in training phase
                 loss.backward()
                 optimizer.step()
@@ -207,11 +228,11 @@ def pair_tune(source_model_path, train_generator, tune_dataset, batch_size=72, n
                 running_loss +=  loss.item()
             f.write('Loss: {:.4f}'.format(loss.item()) +"\n")
             f.flush()
-            #print('Loss: {:.4f}'.format(loss.item()))
+            print('Loss: {:.4f}'.format(loss.item()))
         print('Loss: {:.4f}'.format(running_loss/20))
             # statistics
             #running_loss += loss.item() * inputs.size(0)
-            
+
 
         #epoch_loss = running_loss / inputs.size(0)
 
@@ -221,7 +242,7 @@ def pair_tune(source_model_path, train_generator, tune_dataset, batch_size=72, n
         print('Training complete in {:.0f}m {:.0f}s'.format(
             time_elapsed // 60, time_elapsed % 60))
     f.close()
-    torch.save(model, "./model.h5")
+    torch.save(model, "./market_model.h5")
     return model
 
 
@@ -288,7 +309,7 @@ def pair_pretrain_on_dataset(source, project_path='.', dataset_parent='../datase
 
 if __name__ == '__main__':
     sources = ['market']
-    os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+    os.environ["CUDA_VISIBLE_DEVICES"] = "1"
     #sources = ['cuhk', 'viper', 'market','duke']
     for source in sources:
         #softmax_pretrain_on_dataset(source,

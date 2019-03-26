@@ -2,6 +2,14 @@ from __future__ import division, print_function, absolute_import
 
 import os
 from random import shuffle
+import sys
+import time
+sys.path.append("./")
+
+import torch
+from  torch import nn
+from torch.autograd import Variable
+from resnet import resnet50
 
 import numpy as np
 import tensorflow as tf
@@ -83,47 +91,94 @@ def load_data(LIST, TRAIN):
         shuffle_imgs.append(images[idx])
         shuffle_labels.append(labels[idx])
     images = np.array(shuffle_imgs)
-    labels = to_categorical(shuffle_labels)
-    return images, labels
-
+    #print(shuffle_labels)
+    return images, shuffle_labels
 
 def softmax_model_pretrain(train_list, train_dir, class_count, target_model_path):
-    images, labels = load_data(train_list, train_dir)
-    print( labels[2:5])
-    config = tf.ConfigProto()
-    config.gpu_options.allow_growth = True
+    device=torch.device("cuda")
+    model = resnet50(True)
+    model.to(device)
 
-    sess = tf.Session(config=config)
-    set_session(sess)
-
-    # load pre-trained resnet50
-    base_model = ResNet50(weights='imagenet', include_top=False, input_tensor=Input(shape=(224, 224, 3)))  #weights='imagenet', 
-
-    x = base_model.output
-    x = Flatten(name='flatten')(x)
-    x = Dropout(0.5)(x)
-    x = Dense(class_count, name='fc8', kernel_initializer=RandomNormal(mean=0.0, stddev=0.001))(x) 
-    net = Model(inputs=[base_model.input], outputs=[x])
-
-    for layer in net.layers:
-        layer.trainable = True
-
-    # pretrain
+    num_epochs = 40
     batch_size = 16
+
+    images, labels = load_data(train_list, train_dir)
     train_datagen = ImageDataGenerator(
         shear_range=0.2,
         width_shift_range=0.2,  # 0.
         height_shift_range=0.2)
+    train_generator = train_datagen.flow(images, labels, batch_size=batch_size)
 
-    net.compile(optimizer=SGD(lr=0.001, momentum=0.9), loss='categorical_crossentropy', metrics=['accuracy'])
-    net.fit_generator(
-        train_datagen.flow(images, labels, batch_size=batch_size),
-        steps_per_epoch=len(images) / batch_size + 1, epochs=40,
-    )
-    net.save(target_model_path)
+    f=open("./log1.txt", "w")
+    learning_rate = 1e-3
+    optimizer = torch.optim.SGD(model.parameters(), momentum=0.9, lr=learning_rate)
+    
+    fc = nn.Linear(2048, 751).to(device)
+    Dropout = nn.Dropout(p=0.5)
+    criterion =  nn.CrossEntropyLoss()
+    for epoch in range(num_epochs):
+        print('Epoch {}/{}'.format(epoch, num_epochs ))
+        since = time.time()
+
+        #adjust_learning_rate(optimizer, epoch)
+
+        running_loss = 0.0
+        model.train()
+        # Iterate over data.
+        for i_ in range(16500 // batch_size +1):
+            data_=train_generator.__next__()    
+            inputs=data_[0]
+            labels = data_[1]
+            inputs=np.transpose(inputs, (0,3,1,2))
+            inputs = torch.from_numpy(inputs)
+            labels = torch.from_numpy(labels)
+            inputs=Variable(inputs, requires_grad=True)
+            labels=Variable(labels).long()
+            inputs = inputs.to(device)
+            labels = labels.to(device)
+            
+            
+            # zero the parameter gradients
+            optimizer.zero_grad()
+
+            # forward
+            # track history if only in train
+            with torch.set_grad_enabled(True):
+                outputs = model(inputs)
+                outputs = Dropout(outputs)
+                outputs = fc(outputs)
+                
+                loss = criterion(outputs, labels)
+
+                # backward + optimize only if in training phase
+                loss.backward()
+                optimizer.step()
+
+            if i_ > 16500 // batch_size +1-21:
+                running_loss +=  loss.item()
+            f.write('Loss: {:.4f}'.format(loss.item()) +"\n")
+            f.flush()
+            #print('Loss: {:.4f}'.format(loss.item()))
+        print('Loss: {:.4f}'.format(running_loss/20))
+            # statistics
+            #running_loss += loss.item() * inputs.size(0)
 
 
-def softmax_pretrain_on_dataset(source, project_path='/home/person/rank-reid-release', dataset_parent='/home/person/dataset'):
+        #epoch_loss = running_loss / inputs.size(0)
+
+        #print('Loss: {:.4f}'.format(epoch_loss))
+
+        time_elapsed = time.time() - since
+        print('Training complete in {:.0f}m {:.0f}s'.format(
+            time_elapsed // 60, time_elapsed % 60))
+    f.close()
+    torch.save(model, "./source_market_model.h5")
+    return model
+
+
+
+
+def softmax_pretrain_on_dataset(source, project_path='./', dataset_parent='/home/tianhui/dataset'):
     if source == 'market':
         train_list = project_path + '/dataset/market_train.list'
         train_dir = dataset_parent + '/Market-1501-v15.09.15/bounding_box_train'
@@ -162,6 +217,7 @@ def softmax_pretrain_on_dataset(source, project_path='/home/person/rank-reid-rel
 
 if __name__ == '__main__':
     # sources = ['market', 'grid', 'cuhk', 'viper']
+    os.environ["CUDA_VISIBLE_DEVICES"] = "0"
     sources = ['market']
     for source in sources:
         softmax_pretrain_on_dataset(source)

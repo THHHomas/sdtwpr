@@ -1,6 +1,7 @@
 import torch
 import torch as t
 import os
+import cv2
 
 from keras.preprocessing import image
 import tensorflow as tf
@@ -11,12 +12,11 @@ from utils.file_helper import write, safe_remove
 
 import numpy as np
 
+from pair_train import load_and_process, input_shape
+
 def test_pair_predict(pair_model_path, target_probe_path, target_gallery_path, pid_path, score_path):
     # todo
     model = torch.load(pair_model_path)
-    y_pred = t.rand(1,3,384,128).to("cuda")
-    ttt=model(y_pred)
-    print(ttt.shape)
     test_predict(model, target_probe_path, target_gallery_path, pid_path, score_path)
     '''y_pred=Variable(y_pred, requires_grad=True)
 
@@ -71,7 +71,7 @@ def get_augmentation_batch(image):
     image=np.squeeze(image)
     #Setup storage for the batch
     #print("image shape:", image.shape)
-    batch = np.zeros((2, 384, 128, 3), dtype=np.float32)
+    batch = np.zeros((2, input_shape[0], input_shape[1], 3), dtype=np.float32)
 
     #Four corner crops and the center crop
     #batch[0] = image[16:-16, 8:-8,:]    #Center crop
@@ -109,15 +109,18 @@ def extract_feature(dir_path, net):
         else:
             continue
         image_path = os.path.join(dir_path, image_name)
-        img = image.load_img(image_path, target_size=(384, 128))
-        x = image.img_to_array(img)
-        
+        x = load_and_process(image_path)
         x = np.expand_dims(x, axis=0)
-        x = preprocess_input(x)
-        #
-        x = get_augmentation_batch(x/255.0)
+        x = get_augmentation_batch(x)
+        
+        '''        
+        cv2.imshow("pre", x[0,:,:,:])
+        cv2.waitKey(1000)
+        cv2.imshow("pre", x[1,:,:,:])
+        cv2.waitKey(1000)
+        '''
+
         x= t.Tensor(np.transpose(x,(0,3,1,2))).to("cuda")
-        #print("x.shpae: ",x.shape)
         feature = net(x).cpu().detach().numpy()
         #print(feature.shape)
         #feature[0]=np.squeeze(feature[0])
@@ -127,6 +130,7 @@ def extract_feature(dir_path, net):
         #feature = np.concatenate(feature,axis = 1)
         #print(feature.shape)
         feature = np.mean(feature, axis=0)
+        #print("feature.shpae: ",feature.shape)
         features.append(np.squeeze(feature))
         infos.append((person, camera))
         #print(feature.shape,np.max(feature))
@@ -269,7 +273,7 @@ def market_result_eval(predict_path, log_path='market_result_eval.log', TEST='Ma
     write(log_path, '%f\t%f\n' % (rank1, mAP))
 
 if __name__ == '__main__':
-    
+    os.environ["CUDA_VISIBLE_DEVICES"] = "0"
     market_eval('market', '../dataset/Market-1501-v15.09.15')
     market_result_eval('market_market_pid.log',
                             TEST='../dataset/Market-1501-v15.09.15/bounding_box_test',

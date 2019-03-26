@@ -7,7 +7,7 @@ from torch.autograd import Variable
 import os
 
 SN = 4 # the number of images in a class
-PN = 18
+PN = 16
 relu = nn.ReLU(inplace=False)
 device=t.device("cuda")
 '''
@@ -70,7 +70,7 @@ def triplet_hard_loss(y_true, y_pred):
     negetive = t.min(negetive,1)[0]
     #positive = K.print_tensor(positive)
     #a1 = t.Tensor([1.2]).to("cuda")
-    x=relu(positive-negetive+0.6)
+    x=relu(positive-negetive+1.2)
     loss = t.mean(x)
     return loss
 
@@ -115,7 +115,6 @@ def compute_softdtw(D, gamma):
 
 def hard_sdtw_triplet(feature):
     Distance = data_pre(feature)
-    print(Distance.shape)
     Num = Distance.shape[0]
     negetive = t.zeros((Num, Num-SN )).to(device)
     positive = t.zeros((Num, SN)).to(device)
@@ -124,8 +123,7 @@ def hard_sdtw_triplet(feature):
         positive[i,:] = Distance[i, i//SN:i//SN+SN]
     negetive = t.min(negetive,1)[0]
     positive = t.max(positive,1)[0]
-    x=relu(positive-negetive+0.6)
-    print(x)
+    x=relu(positive-negetive+1.2)
     loss = t.mean(x)
     return loss
 
