@@ -33,9 +33,10 @@ from numpy.random import randint, shuffle, choice
 
 
 batch_num=0
-SN = 4 # the number of images in a class
-PN = 16
+SN = 3 # the number of images in a class
+PN = 18
 input_shape=(384,128,3)
+
 
 def mix_data_prepare(data_list_path, train_dir_path):
     class_img_labels = dict()
@@ -163,9 +164,9 @@ reduce_lr = LearningRateScheduler(common_lr)
 def adjust_learning_rate(optimizer, epoch):
     """Sets the learning rate to the initial LR decayed by 10 every 30 epochs"""
     for param_group in optimizer.param_groups:
-        if epoch< 100:
+        if epoch< 60:
             param_group['lr'] = 1e-3#$param_group['lr']*(0.1 ** (epoch // 30))
-        elif epoch < 180:
+        elif epoch < 80:
             param_group['lr']=3e-4
         else:
             param_group['lr']=3e-5
@@ -178,14 +179,16 @@ def pair_tune(source_model_path, train_generator, tune_dataset, batch_size=72, n
     model.to(device)
     #model = torch.load("./source_market_model.h5")
 
-    num_epochs = 220
+    num_epochs = 100
     batch_size = PN*SN
 
     f=open("./log.txt", "w")
     learning_rate = 1e-3
     optimizer = torch.optim.Adam(model.parameters(), betas=(0.9, 0.999), lr=learning_rate, weight_decay=0.0005)
-    downConv = nn.Conv2d(2048, 128, 1).to(device)
-
+    downConv1 = nn.Conv2d(2048, 1024, 1).to(device)
+    downConv2 = nn.Conv2d(1024, 128, 1).to(device)
+    bn = nn.BatchNorm2d(1024).to(device)
+    bn2 = nn.BatchNorm2d(128).to(device)
     for epoch in range(num_epochs):
         print('Epoch {}/{}'.format(epoch, num_epochs ))
         since = time.time()
@@ -216,7 +219,10 @@ def pair_tune(source_model_path, train_generator, tune_dataset, batch_size=72, n
             # track history if only in train
             with torch.set_grad_enabled(True):
                 outputs = model(inputs)
-                outputs =  downConv(outputs)
+                outputs =  downConv1(outputs)
+                outputs = bn(outputs)
+                outputs =  downConv2(outputs)
+                #outputs = bn2(outputs)
                 #print(outputs.shape)
                 loss = hard_sdtw_triplet(outputs)
 		

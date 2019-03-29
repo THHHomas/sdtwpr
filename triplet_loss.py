@@ -4,12 +4,14 @@ from numba import jit
 import torch as t
 import torch.nn as nn
 from torch.autograd import Variable
+import torch.nn.functional as F
 import os
 
-SN = 4 # the number of images in a class
-PN = 16
+SN = 3 # the number of images in a class
+PN = 18
 relu = nn.ReLU(inplace=False)
 device=t.device("cuda")
+avgpool = nn.AdaptiveAvgPool2d((1, 1))
 '''
 #@jit(nopython = True)
 def triplet_hard_loss(y_true, y_pred):
@@ -88,18 +90,76 @@ def data_pre(feature):
     for i in range(Num):
         D = t.zeros((Num*F_DIM, DIM , DIM )).to(device)
         for j in range(Num):
-            dis = t.bmm(feature[i,:,:,:],t.transpose(feature[j,:,:,:], 1,2) )
+            dis =t.sqrt(relu(2*(1- t.bmm(feature[i,:,:,:],t.transpose(feature[j,:,:,:], 1,2) ))))
+            '''input1 = feature[i,:,:,:].unsqueeze(1)
+            input2 = feature[j,:,:,:].unsqueeze(2)
+            input1 = input1.repeat(1, 12,1,1)
+            input2 = input2.repeat(1, 1,12,1)
+            subRes = (input1 - input2)**2
+            dis = t.sum(subRes, 3)+1e-16'''
+            #print(feature[i,:,:,:].shape, t.norm(feature[i,:,:,:], dim =2, p=2))
+            
             D[j*F_DIM:(j+1)*F_DIM,:,:] = dis
-        R = compute_softdtw(D, 0.1)
+
+        #print(t.max(D), t.min(D))
+        R = compute_softdtw(D)
         Distance[Num*i*F_DIM: Num*(i+1)*F_DIM] = R
+    print(D[0,:,:])
     Distance = t.reshape(Distance, (Num,Num, F_DIM ))
     Distance = t.mean(Distance,2)
+    print(Distance[0,0:12])
+    #print(Distance.shape)
     return Distance
 
-def compute_softdtw(D, gamma):
+def compute_softdtw(D):
+    ###batch DTW
+    ### D with shape (N, W, W), N is the batch size, W is the length of squence
+    gamma = 0.1
+    NUM = D.shape[0]
+    DIM = D.shape[1]
+    R = t.zeros((NUM, DIM + 1, DIM + 1)).to(device) + 1e8
+
+    R[:, 0, 0] = 0
+    for j in range(1, DIM + 1):
+        for i in range(1, DIM + 1):
+            r0 = R[:,i - 1, j - 1] 
+            r1 = R[:,i - 1, j] 
+            r2 = R[:,i, j - 1]
+            #rmin = -maximum(maximum(-r0, -r1), -r2)
+            r0 = t.unsqueeze(r0, 0)
+            r1 = t.unsqueeze(r1, 0)
+            r2 = t.unsqueeze(r2, 0)
+            r = t.cat((r0, r1, r2), 0)
+            r = t.transpose(r, 0,1)
+            r0_map = (r1>=r0)*(r2>=r0)
+            r1_map = (r0>r1)*(r2>=r1)
+            r2_map = (r0>r2)*(r1>r2)
+            r_map = t.cat((r0_map, r1_map, r2_map), 0)
+            r_map = t.transpose(r_map, 0,1)
+            #rmin = -maximum(maximum(-r0, -r1), -r2)
+            #rmax = maximum(maximum(r0, r1), r2)
+            #rsum = t.exp(r0 - rmax) + t.exp(r1 - rmax) + t.exp(r2 - rmax)
+            #softmin = - gamma * (t.log(rsum) + rmax)
+            #print(r[0:10])
+            pre_dis = t.masked_select(r, r_map)
+            #print(pre_dis[0:10])
+            #print("predis", pre_dis)
+            #print("rmin", pre_dis)
+            R[:,i, j] =  D[:, i-1, j-1] + pre_dis
+    row = R[:, -1, :]
+    col = R[:,:, -1]
+    rc = t.cat((row, col),1)
+    #print("rcmin", t.min(rc,1))
+    res = t.min(rc,1)[0] #
+    return res
+
+'''
+def compute_softdtw(D):
+    gamma = 0.1
     NUM = D.shape[0]
     DIM = D.shape[1]
     R = t.zeros((NUM, DIM + 1, DIM + 1)).to(device) +1e-8
+
     R[0, 0] = 0
     for j in range(1, DIM + 1):
         for i in range(1, DIM + 1):
@@ -110,11 +170,33 @@ def compute_softdtw(D, gamma):
             rmax = maximum(maximum(r0, r1), r2)
             rsum = t.exp(r0 - rmax) + t.exp(r1 - rmax) + t.exp(r2 - rmax)
             softmin = - gamma * (t.log(rsum) + rmax)
+            
             R[:,i, j] = D[:, i - 1, j - 1] + softmin
-    return R[:,DIM,DIM]
+    return R[:,-2,-2]
+'''
+
+def ec_distance
+
+def l2_norm(feature):
+    shape = feature.shape
+    feature = t.reshape(feature,(-1,4))
+    f_norm = t.norm(feature, dim = 1, p=2) 
+    f_norm = t.reshape(f_norm, (-1,))
+    feature = t.transpose(feature, 0,1)
+    feature = feature/f_norm
+    feature = t.transpose(feature, 0,1)
+    feature = t.reshape(feature,(shape[0], shape[1], shape[2], shape[3]))
+    return feature
 
 def hard_sdtw_triplet(feature):
+    
+    feature = l2_norm(feature)
+    print(feature[0,0:2,:,:])
+    #print(t.norm(feature, dim = 3, p=2)) 
     Distance = data_pre(feature)
+    
+
+    #print(Distance)
     Num = Distance.shape[0]
     negetive = t.zeros((Num, Num-SN )).to(device)
     positive = t.zeros((Num, SN)).to(device)
@@ -127,19 +209,34 @@ def hard_sdtw_triplet(feature):
     loss = t.mean(x)
     return loss
 
+def calD(s1,s2):
+    D = np.zeros((3, len(s1), len(s2)), dtype = np.float32)
+    for i in range(len(s1)):
+        for j in range(len(s2)):
+            D[0,i,j] = abs(s1[i]-s2[j])
+    D[1,:,:]=D[0,:,:]
+    D[2,:,:]=D[0,:,:]
+    return D
 
 
 if __name__ == '__main__':
     os.environ['CUDA_VISIBLE_DEVICES']="1"
     since = time.time()
-    y_pred = t.rand(PN*SN,5,12,4).to(device)
+    y_pred = t.ones(PN*SN,64,12,4).to(device)
     y_pred=Variable(y_pred, requires_grad=True)
-    loss = hard_sdtw_triplet(y_pred)
-
+    #loss = hard_sdtw_triplet(y_pred)
+    s1 = [1,2,3,4,5,5,5,4]
+    s2 = [1,3,5,4,4,4,4, 1]
+    D = calD(s1,s2)
+    print(D[0,:,:])
     #for i in range(64):
     #    R = compute_softdtw(y_pred, 0.1)
+    D = Variable(t.Tensor(D) , requires_grad = True).to(device)
+    res = compute_softdtw(D)
+    print(res)
 
-    print("time:", time.time()-since, loss)
+    #print("time:", time.time()-since, loss)
+
     #loss= triplet_hard_loss(y_pred, y_pred) 
     #print(loss)
 
