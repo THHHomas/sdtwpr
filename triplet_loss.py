@@ -7,7 +7,7 @@ from torch.autograd import Variable
 import torch.nn.functional as F
 import os
 
-SN = 3 # the number of images in a class
+SN = 4 # the number of images in a class
 PN = 18
 relu = nn.ReLU(inplace=False)
 device=t.device("cuda")
@@ -83,6 +83,7 @@ def maximum(R,S):
 
 
 def data_pre(feature):
+    feature = l2_norm(feature)
     Num = PN*SN
     DIM = feature.shape[2]
     F_DIM  = feature.shape[1]
@@ -104,12 +105,11 @@ def data_pre(feature):
         #print(t.max(D), t.min(D))
         R = compute_softdtw(D)
         Distance[Num*i*F_DIM: Num*(i+1)*F_DIM] = R
-    print(D[0,:,:])
     Distance = t.reshape(Distance, (Num,Num, F_DIM ))
     Distance = t.mean(Distance,2)
-    print(Distance[0,0:12])
+    
     #print(Distance.shape)
-    return Distance
+    return Distance/6
 
 def compute_softdtw(D):
     ###batch DTW
@@ -175,34 +175,54 @@ def compute_softdtw(D):
     return R[:,-2,-2]
 '''
 
-def ec_distance
+def ec_distance(feature):
+
+    feature = avgpool(feature)
+    feature =feature.squeeze()
+    y_ =t.sqrt(t.sum(feature**2, 1)).unsqueeze(1)
+    #print( np.mean(np.square(y-y_) , axis=1) )
+    feature = feature/y_
+
+    #print(t.sqrt(t.sum(feature**2, 1)))
+    Num = feature.shape[0]
+    input1 = feature.unsqueeze(0)
+    input2 = feature.unsqueeze(1)
+
+    input1 = input1.repeat(Num, 1,1)
+    input2 = input2.repeat(1, Num, 1)
+    subRes = (input1 - input2)**2
+    res =t.sqrt(1e-16 +  t.sum(subRes, 2))
+    return res
 
 def l2_norm(feature):
     shape = feature.shape
     feature = t.reshape(feature,(-1,4))
-    f_norm = t.norm(feature, dim = 1, p=2) 
-    f_norm = t.reshape(f_norm, (-1,))
-    feature = t.transpose(feature, 0,1)
-    feature = feature/f_norm
-    feature = t.transpose(feature, 0,1)
+    y_ =t.sqrt(t.sum(feature**2, 1)).unsqueeze(1)
+    #print( np.mean(np.square(y-y_) , axis=1) )
+    feature = feature/y_
     feature = t.reshape(feature,(shape[0], shape[1], shape[2], shape[3]))
     return feature
 
-def hard_sdtw_triplet(feature):
+def hard_sdtw_triplet(feature, f):
+    ### DTW distance
     
-    feature = l2_norm(feature)
-    print(feature[0,0:2,:,:])
-    #print(t.norm(feature, dim = 3, p=2)) 
+    
+    ##print(feature[0,0:2,:,:])
+    ##print(t.norm(feature, dim = 3, p=2)) 
     Distance = data_pre(feature)
     
-
+    ##Euclidean Distance
+    #Distance = ec_distance(feature)
+    ##print(Distance.shape, Distance)
+    log = Distance[0,0:12].cpu().detach().numpy()
+    f.write(str(log.tolist()))
     #print(Distance)
     Num = Distance.shape[0]
     negetive = t.zeros((Num, Num-SN )).to(device)
     positive = t.zeros((Num, SN)).to(device)
     for i in range(Num):
-        negetive[i,:] = t.cat([Distance[i, 0:i//SN],Distance[i, i//SN+SN:]],0)
-        positive[i,:] = Distance[i, i//SN:i//SN+SN]
+        negetive[i,:] = t.cat([Distance[i, 0:(i//SN)*SN],Distance[i, (i//SN)*SN+SN:]],0)
+        positive[i,:] = Distance[i, (i//SN)*SN:(i//SN)*SN+SN]
     negetive = t.min(negetive,1)[0]
     positive = t.max(positive,1)[0]
     x=relu(positive-negetive+1.2)
@@ -223,9 +243,10 @@ if __name__ == '__main__':
     os.environ['CUDA_VISIBLE_DEVICES']="1"
     since = time.time()
     y_pred = t.ones(PN*SN,64,12,4).to(device)
+    y_pred[0,0,0,0] = 1000
     y_pred=Variable(y_pred, requires_grad=True)
-    #loss = hard_sdtw_triplet(y_pred)
-    s1 = [1,2,3,4,5,5,5,4]
+    loss = hard_sdtw_triplet(y_pred)
+    '''s1 = [1,2,3,4,5,5,5,4]
     s2 = [1,3,5,4,4,4,4, 1]
     D = calD(s1,s2)
     print(D[0,:,:])
@@ -234,8 +255,8 @@ if __name__ == '__main__':
     D = Variable(t.Tensor(D) , requires_grad = True).to(device)
     res = compute_softdtw(D)
     print(res)
-
-    #print("time:", time.time()-since, loss)
+    '''
+    print("time:", time.time()-since, loss)
 
     #loss= triplet_hard_loss(y_pred, y_pred) 
     #print(loss)

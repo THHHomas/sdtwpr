@@ -33,7 +33,7 @@ from numpy.random import randint, shuffle, choice
 
 
 batch_num=0
-SN = 3 # the number of images in a class
+SN = 4 # the number of images in a class
 PN = 18
 input_shape=(384,128,3)
 
@@ -224,7 +224,7 @@ def pair_tune(source_model_path, train_generator, tune_dataset, batch_size=72, n
                 outputs =  downConv2(outputs)
                 #outputs = bn2(outputs)
                 #print(outputs.shape)
-                loss = hard_sdtw_triplet(outputs)
+                loss = hard_sdtw_triplet(outputs, f)
 		
                 # backward + optimize only if in training phase
                 loss.backward()
@@ -234,7 +234,7 @@ def pair_tune(source_model_path, train_generator, tune_dataset, batch_size=72, n
                 running_loss +=  loss.item()
             f.write('Loss: {:.4f}'.format(loss.item()) +"\n")
             f.flush()
-            print('Loss: {:.4f}'.format(loss.item()))
+            #print('Loss: {:.4f}'.format(loss.item()))
         print('Loss: {:.4f}'.format(running_loss/20))
             # statistics
             #running_loss += loss.item() * inputs.size(0)
