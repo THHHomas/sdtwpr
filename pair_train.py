@@ -28,7 +28,7 @@ from keras.models import load_model
 from keras.optimizers import Adam, SGD
 from keras.preprocessing import image
 from keras.utils import plot_model, to_categorical, multi_gpu_model
-from numpy.random import randint, shuffle, choice
+from numpy.random import randint, shuffle, choice, permutation
 
 
 
@@ -112,13 +112,20 @@ def triplet_hard_generator(class_img_labels, batch_size, train=False):
     global SN
     global input_shape
     while True:
-        pre_label = randint(len(class_img_labels), size=PN)
+        if PN > 
+        pre_label = permutation(len(class_img_labels))[0:PN]
+        #pre_label = randint(len(class_img_labels), size=PN)
         pre_images = list()
         for i in range(PN):
-            len_pre_label_i = len(class_img_labels[str(pre_label[i])])
+            #len_pre_label_i = len(class_img_labels[str(pre_label[i])])
+            labels_i  = class_img_labels[str(pre_label[i])]
+            if len(labels_i) >= SN:
+                label_index = permutation(len(labels_i))[0:SN]
+            else:
+                label_index = randint(len(labels_i), size=SN)
+
             for j in range(SN):
-                pre_image = class_img_labels[str(pre_label[i])][
-                                   choice(len_pre_label_i)]
+                pre_image = labels_i[label_index[j]]
                 '''img = image.load_img(pre_image, target_size=[input_shape[0], input_shape[1]])
                 img = image.img_to_array(img)
                 img = preprocess_input(img)
