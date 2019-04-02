@@ -165,9 +165,9 @@ def adjust_learning_rate(optimizer, epoch):
     """Sets the learning rate to the initial LR decayed by 10 every 30 epochs"""
     for param_group in optimizer.param_groups:
         if epoch< 60:
-            param_group['lr'] = 1e-3#$param_group['lr']*(0.1 ** (epoch // 30))
+            param_group['lr'] = 3e-4#$param_group['lr']*(0.1 ** (epoch // 30))
         elif epoch < 80:
-            param_group['lr']=3e-4
+            param_group['lr']=1e-4
         else:
             param_group['lr']=3e-5
 
@@ -179,11 +179,11 @@ def pair_tune(source_model_path, train_generator, tune_dataset, batch_size=72, n
     model.to(device)
     #model = torch.load("./source_market_model.h5")
 
-    num_epochs = 100
+    num_epochs = 110
     batch_size = PN*SN
 
     f=open("./log.txt", "w")
-    learning_rate = 1e-3
+    learning_rate = 3e-4
     optimizer = torch.optim.Adam(model.parameters(), betas=(0.9, 0.999), lr=learning_rate, weight_decay=0.0005)
     downConv1 = nn.Conv2d(2048, 1024, 1).to(device)
     downConv2 = nn.Conv2d(1024, 128, 1).to(device)
