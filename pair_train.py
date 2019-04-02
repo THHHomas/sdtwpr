@@ -33,8 +33,8 @@ from numpy.random import randint, shuffle, choice, permutation
 
 
 batch_num=0
-SN = 4 # the number of images in a class
-PN = 18
+SN = 6 # the number of images in a class
+PN = 12
 input_shape=(384,128,3)
 
 
@@ -321,7 +321,7 @@ def pair_pretrain_on_dataset(source, project_path='.', dataset_parent='../datase
 
 if __name__ == '__main__':
     sources = ['market']
-    os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+    #os.environ["CUDA_VISIBLE_DEVICES"] = "1"
     #sources = ['cuhk', 'viper', 'market','duke']
     for source in sources:
         #softmax_pretrain_on_dataset(source,
