@@ -225,7 +225,7 @@ def hard_sdtw_triplet(feature, f):
         positive[i,:] = Distance[i, (i//SN)*SN:(i//SN)*SN+SN]
     negetive = t.min(negetive,1)[0]
     positive = t.max(positive,1)[0]
-    x=relu(positive-negetive+1.2)
+    x=relu(positive-negetive+2)
     loss = t.mean(x)
     return loss
 
