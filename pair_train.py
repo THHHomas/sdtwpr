@@ -165,9 +165,9 @@ def adjust_learning_rate(optimizer, epoch):
     """Sets the learning rate to the initial LR decayed by 10 every 30 epochs"""
     for param_group in optimizer.param_groups:
         if epoch< 60:
-            param_group['lr'] = 1e-3#$param_group['lr']*(0.1 ** (epoch // 30))
+            param_group['lr'] = 3e-4#$param_group['lr']*(0.1 ** (epoch // 30))
         elif epoch < 80:
-            param_group['lr']=3e-4
+            param_group['lr']=1e-4
         else:
             param_group['lr']=3e-5
 
@@ -179,7 +179,7 @@ def pair_tune(source_model_path, train_generator, tune_dataset, batch_size=72, n
     model.to(device)
     #model = torch.load("./source_market_model.h5")
 
-    num_epochs = 100
+    num_epochs = 110
     batch_size = PN*SN
 
     f=open("./log.txt", "w")
@@ -315,7 +315,7 @@ def pair_pretrain_on_dataset(source, project_path='.', dataset_parent='../datase
 
 if __name__ == '__main__':
     sources = ['market']
-    os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+    os.environ["CUDA_VISIBLE_DEVICES"] = "0"
     #sources = ['cuhk', 'viper', 'market','duke']
     for source in sources:
         #softmax_pretrain_on_dataset(source,
