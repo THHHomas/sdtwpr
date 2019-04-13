@@ -10,24 +10,6 @@ from torch.autograd import Variable
 
 import cv2
 
-import tensorflow as tf
-import keras
-from keras.layers import Lambda
-from keras import Input
-from keras import backend as K
-K.set_image_dim_ordering('tf') 
-from keras.applications.resnet50 import ResNet50
-from keras.applications.resnet50 import preprocess_input
-from keras.callbacks import EarlyStopping, ReduceLROnPlateau, LearningRateScheduler
-from keras.engine import Model
-from keras.layers import Lambda, Dense, Dropout, Flatten, BatchNormalization, AveragePooling2D,Activation,Conv2D,MaxPooling2D,GlobalMaxPooling2D,ZeroPadding2D,GlobalAveragePooling2D
-from keras import layers
-
-
-from keras.models import load_model
-from keras.optimizers import Adam, SGD
-from keras.preprocessing import image
-from keras.utils import plot_model, to_categorical, multi_gpu_model
 from numpy.random import randint, shuffle, choice, permutation
 
 
@@ -147,25 +129,12 @@ def triplet_hard_generator(class_img_labels, batch_size, train=False):
         label=np.transpose(label).reshape(SN*PN,1)
         label=np.squeeze(label)
         #print(label)
-        label = to_categorical(label, num_classes=len(class_img_labels))
+        
         #print(label)
         cur_epoch += 1
         yield np.array(pre_images), label
 
-def common_lr(epoch):
-    epsil = 0.01
-    gamma = 0.1
-    if epoch < 40:
-        lr= epsil
-    elif epoch<60:
-        lr = epsil*gamma #epsil * np.power(1e-3, (epoch-65)/(110-65))
-    else:
-        lr = epsil*gamma*gamma#1e-4 * np.power(1e-3, (epoch-120)/(160-120))
-   # else:
-   #     lr = epsil*gamma*gamma*gamma
-    return lr
 
-reduce_lr = LearningRateScheduler(common_lr)
 
 def adjust_learning_rate(optimizer, epoch):
     """Sets the learning rate to the initial LR decayed by 10 every 30 epochs"""
@@ -207,15 +176,15 @@ def pair_tune(source_model_path, train_generator, tune_dataset, batch_size=72, n
         for i_ in range(16500 // batch_size + 1):
             data_=train_generator.__next__()    
             inputs=data_[0]
-            labels = data_[1]
+            #labels = data_[1]
             #print(inputs.shape)
             inputs=np.transpose(inputs, (0,3,1,2))
             inputs = torch.from_numpy(inputs)
-            labels = torch.from_numpy(labels)
+            #labels = torch.from_numpy(labels)
             inputs=Variable(inputs, requires_grad=True)
-            labels=Variable(labels, requires_grad=True)
+            #labels=Variable(labels, requires_grad=True)
             inputs = inputs.to(device)
-            labels = labels.to(device)
+            #labels = labels.to(device)
             
             
             # zero the parameter gradients

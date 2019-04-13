@@ -8,7 +8,7 @@ import torch.nn.functional as F
 import os
 
 SN = 6 # the number of images in a class
-PN = 12
+PN = 3
 relu = nn.ReLU(inplace=False)
 device=t.device("cuda")
 avgpool = nn.AdaptiveAvgPool2d((1, 1))
@@ -210,7 +210,7 @@ def hard_sdtw_triplet(feature, f):
     ##print(feature[0,0:2,:,:])
     ##print(t.norm(feature, dim = 3, p=2)) 
     Distance = data_pre(feature)
-    
+    #
     ##Euclidean Distance
     #Distance = ec_distance(feature)
     ##print(Distance.shape, Distance)
@@ -240,12 +240,14 @@ def calD(s1,s2):
 
 
 if __name__ == '__main__':
-    os.environ['CUDA_VISIBLE_DEVICES']="1"
-    since = time.time()
-    y_pred = t.ones(PN*SN,64,12,4).to(device)
+    os.environ['CUDA_VISIBLE_DEVICES']="0"
+    f=open("test.txt", "w")
+    
+    y_pred = t.ones(PN*SN,128,12,4).to(device)
     y_pred[0,0,0,0] = 1000
     y_pred=Variable(y_pred, requires_grad=True)
-    loss = hard_sdtw_triplet(y_pred)
+    since = time.time()
+    loss = hard_sdtw_triplet(y_pred, f)
     '''s1 = [1,2,3,4,5,5,5,4]
     s2 = [1,3,5,4,4,4,4, 1]
     D = calD(s1,s2)
