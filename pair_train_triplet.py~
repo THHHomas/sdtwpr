@@ -5,11 +5,29 @@ import numpy as np
 import random
 import time
 from resnet import resnet50
-from triplet_loss import hard_sdtw_triplet
+from triplet_loss import hard_sdtw_triplet,  triplet_hard_loss
 from torch.autograd import Variable
 
 import cv2
 
+import tensorflow as tf
+import keras
+from keras.layers import Lambda
+from keras import Input
+from keras import backend as K
+K.set_image_dim_ordering('tf') 
+from keras.applications.resnet50 import ResNet50
+from keras.applications.resnet50 import preprocess_input
+from keras.callbacks import EarlyStopping, ReduceLROnPlateau, LearningRateScheduler
+from keras.engine import Model
+from keras.layers import Lambda, Dense, Dropout, Flatten, BatchNormalization, AveragePooling2D,Activation,Conv2D,MaxPooling2D,GlobalMaxPooling2D,ZeroPadding2D,GlobalAveragePooling2D
+from keras import layers
+
+
+from keras.models import load_model
+from keras.optimizers import Adam, SGD
+from keras.preprocessing import image
+from keras.utils import plot_model, to_categorical, multi_gpu_model
 from numpy.random import randint, shuffle, choice, permutation
 
 
@@ -17,7 +35,7 @@ from numpy.random import randint, shuffle, choice, permutation
 batch_num=0
 SN = 4 # the number of images in a class
 PN = 18
-input_shape=(256,128,3)
+input_shape=(384,128,3)
 
 
 def mix_data_prepare(data_list_path, train_dir_path):
@@ -72,8 +90,8 @@ def load_and_process(pre_image):
     img = cv2.imread(pre_image)
     img = cv2.resize(img, (input_shape[1], input_shape[0]))
 
-    
-
+    #cv2.imshow("preview", img)
+    #k= cv2.waitKey(1000)
     img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
     img = img/255.0
 
@@ -121,15 +139,15 @@ def triplet_hard_generator(class_img_labels, batch_size, train=False):
                 
                 #img = preprocess_input(img)[0]
                 
-                #if random.random()>0.5:
-                #    img = img[:,::-1,:]
+                if random.random()>0.5:
+                    img = img[:,::-1,:]
                 pre_images.append(img)
 	#print(pre_label)
         label=np.array([pre_label for i in range(SN)])
         label=np.transpose(label).reshape(SN*PN,1)
         label=np.squeeze(label)
         #print(label)
-        
+        label = to_categorical(label, num_classes=len(class_img_labels))
         #print(label)
         cur_epoch += 1
         yield np.array(pre_images), label
@@ -140,10 +158,10 @@ def adjust_learning_rate(optimizer, epoch):
     for param_group in optimizer.param_groups:
         if epoch< 60:
             param_group['lr'] = 3e-4#$param_group['lr']*(0.1 ** (epoch // 30))
-        elif epoch < 80:
+        elif epoch < 90:
             param_group['lr']=1e-4
         else:
-            param_group['lr']=3e-5
+            param_group['lr']=1e-5
 
 def pair_tune(source_model_path, train_generator, tune_dataset, batch_size=72, num_classes=751):
     global PN
@@ -158,12 +176,12 @@ def pair_tune(source_model_path, train_generator, tune_dataset, batch_size=72, n
 
     f=open("./log.txt", "w")
     learning_rate = 3e-4
-    optimizer = torch.optim.Adam(model.parameters(), betas=(0.9, 0.999), lr=learning_rate)
-    downConv1 = nn.Conv2d(2048, 1024, 1).to(device)
-    downConv2 = nn.Conv2d(1024, 128, 1).to(device)
+    optimizer = torch.optim.Adam(model.parameters(), betas=(0.9, 0.999),weight_decay = 5e-4, lr=learning_rate)
+    downConv1 = nn.Linear(2048, 1024, 1).to(device)
+    downConv2 = nn.Linear(1024, 128, 1).to(device)
     
-    bn = nn.BatchNorm2d(1024).to(device)
-    bn2 = nn.BatchNorm2d(128).to(device)
+    bn = nn.BatchNorm1d(1024).to(device)
+    best_loss = 100.0
     for epoch in range(num_epochs):
         print('Epoch {}/{}'.format(epoch, num_epochs ))
         since = time.time()
@@ -173,23 +191,23 @@ def pair_tune(source_model_path, train_generator, tune_dataset, batch_size=72, n
         running_loss = 0.0
         model.train()
         # Iterate over data.
-        for i_ in range(16500 // batch_size + 1):
+        for i_ in range( 16500 // batch_size +1):
             data_=train_generator.__next__()    
             inputs=data_[0]
-            #labels = data_[1]
+            labels = data_[1]
             #print(inputs.shape)
             inputs=np.transpose(inputs, (0,3,1,2))
             inputs = torch.from_numpy(inputs)
-            #labels = torch.from_numpy(labels)
+            labels = torch.from_numpy(labels)
             inputs=Variable(inputs, requires_grad=True)
-            #labels=Variable(labels, requires_grad=True)
+            labels=Variable(labels, requires_grad=True)
             inputs = inputs.to(device)
-            #labels = labels.to(device)
+            labels = labels.to(device)
             
             
             # zero the parameter gradients
             optimizer.zero_grad()
-
+            #print("lr:", optimizer.param_groups[0]['lr'])
             # forward
             # track history if only in train
             with torch.set_grad_enabled(True):
@@ -200,18 +218,18 @@ def pair_tune(source_model_path, train_generator, tune_dataset, batch_size=72, n
                 outputs =  downConv2(outputs)
                 #outputs = bn2(outputs)
                 #print(outputs.shape)
-                loss = hard_sdtw_triplet(outputs, f)
-		
+                loss = triplet_hard_loss(outputs,f)
+                
                 # backward + optimize only if in training phase
                 loss.backward()
                 optimizer.step()
 
-            if i_ > 16500 // batch_size +1-21:
+            if i_ > 16500 // batch_size +1-101:
                 running_loss +=  loss.item()
             f.write('Loss: {:.4f}'.format(loss.item()) +"\n")
             f.flush()
             #print('Loss: {:.4f}'.format(loss.item()))
-        print('Loss: {:.4f}'.format(running_loss/20))
+        print('Loss: {:.4f}'.format(running_loss/100))
             # statistics
             #running_loss += loss.item() * inputs.size(0)
 
@@ -224,6 +242,7 @@ def pair_tune(source_model_path, train_generator, tune_dataset, batch_size=72, n
         print('Training complete in {:.0f}m {:.0f}s'.format(
             time_elapsed // 60, time_elapsed % 60))
     f.close()
+    #torch.save(model.state_dict(), "./market_model.h5")
     torch.save(model, "./market_model.h5")
     return model
 

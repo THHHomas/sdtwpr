@@ -33,9 +33,9 @@ from numpy.random import randint, shuffle, choice, permutation
 
 
 batch_num=0
-SN = 6 # the number of images in a class
-PN = 12
-input_shape=(384,128,3)
+SN = 4 # the number of images in a class
+PN = 18
+input_shape=(256,128,3)
 
 
 def mix_data_prepare(data_list_path, train_dir_path):
@@ -190,9 +190,10 @@ def pair_tune(source_model_path, train_generator, tune_dataset, batch_size=72, n
 
     f=open("./log.txt", "w")
     learning_rate = 3e-4
-    optimizer = torch.optim.Adam(model.parameters(), betas=(0.9, 0.999), lr=learning_rate, weight_decay=0.0005)
+    optimizer = torch.optim.Adam(model.parameters(), betas=(0.9, 0.999), lr=learning_rate)
     downConv1 = nn.Conv2d(2048, 1024, 1).to(device)
     downConv2 = nn.Conv2d(1024, 128, 1).to(device)
+    
     bn = nn.BatchNorm2d(1024).to(device)
     bn2 = nn.BatchNorm2d(128).to(device)
     for epoch in range(num_epochs):
@@ -225,6 +226,7 @@ def pair_tune(source_model_path, train_generator, tune_dataset, batch_size=72, n
             # track history if only in train
             with torch.set_grad_enabled(True):
                 outputs = model(inputs)
+                
                 outputs =  downConv1(outputs)
                 outputs = bn(outputs)
                 outputs =  downConv2(outputs)
