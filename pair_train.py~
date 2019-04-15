@@ -253,8 +253,6 @@ def pair_tune(source_model_path, train_generator, tune_dataset, batch_size=72, n
         time_elapsed = time.time() - since
         print('Training complete in {:.0f}m {:.0f}s'.format(
             time_elapsed // 60, time_elapsed % 60))
-        if epoch%10 == 0:
-            torch.save(model, "./snapshot/market_model"+str(epoch)+".h5")
     f.close()
     torch.save(model, "./market_model.h5")
     return model
@@ -323,9 +321,6 @@ def pair_pretrain_on_dataset(source, project_path='.', dataset_parent='../datase
 
 if __name__ == '__main__':
     sources = ['market']
-
-    os.environ["CUDA_VISIBLE_DEVICES"] = "0"
-
     #os.environ["CUDA_VISIBLE_DEVICES"] = "1"
     #sources = ['cuhk', 'viper', 'market','duke']
     for source in sources:
