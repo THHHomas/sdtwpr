@@ -10,24 +10,6 @@ from torch.autograd import Variable
 
 import cv2
 
-import tensorflow as tf
-import keras
-from keras.layers import Lambda
-from keras import Input
-from keras import backend as K
-K.set_image_dim_ordering('tf') 
-from keras.applications.resnet50 import ResNet50
-from keras.applications.resnet50 import preprocess_input
-from keras.callbacks import EarlyStopping, ReduceLROnPlateau, LearningRateScheduler
-from keras.engine import Model
-from keras.layers import Lambda, Dense, Dropout, Flatten, BatchNormalization, AveragePooling2D,Activation,Conv2D,MaxPooling2D,GlobalMaxPooling2D,ZeroPadding2D,GlobalAveragePooling2D
-from keras import layers
-
-
-from keras.models import load_model
-from keras.optimizers import Adam, SGD
-from keras.preprocessing import image
-from keras.utils import plot_model, to_categorical, multi_gpu_model
 from numpy.random import randint, shuffle, choice, permutation
 
 
@@ -147,7 +129,7 @@ def triplet_hard_generator(class_img_labels, batch_size, train=False):
         label=np.transpose(label).reshape(SN*PN,1)
         label=np.squeeze(label)
         #print(label)
-        label = to_categorical(label, num_classes=len(class_img_labels))
+        #label = to_categorical(label, num_classes=len(class_img_labels))
         #print(label)
         cur_epoch += 1
         yield np.array(pre_images), label
@@ -156,12 +138,10 @@ def triplet_hard_generator(class_img_labels, batch_size, train=False):
 def adjust_learning_rate(optimizer, epoch):
     """Sets the learning rate to the initial LR decayed by 10 every 30 epochs"""
     for param_group in optimizer.param_groups:
-        if epoch< 60:
-            param_group['lr'] = 3e-4#$param_group['lr']*(0.1 ** (epoch // 30))
-        elif epoch < 90:
-            param_group['lr']=1e-4
+        if epoch< 70:
+            param_group['lr'] = 3e-4
         else:
-            param_group['lr']=1e-5
+            param_group['lr']=3e-5
 
 def pair_tune(source_model_path, train_generator, tune_dataset, batch_size=72, num_classes=751):
     global PN
@@ -171,12 +151,12 @@ def pair_tune(source_model_path, train_generator, tune_dataset, batch_size=72, n
     model.to(device)
     #model = torch.load("./source_market_model.h5")
 
-    num_epochs = 110
+    num_epochs = 90
     batch_size = PN*SN
 
     f=open("./log.txt", "w")
     learning_rate = 3e-4
-    optimizer = torch.optim.Adam(model.parameters(), betas=(0.9, 0.999),weight_decay = 5e-4, lr=learning_rate)
+    optimizer = torch.optim.Adam(model.parameters(), betas=(0.9, 0.999),weight_decay = 0, lr=learning_rate)
     downConv1 = nn.Linear(2048, 1024, 1).to(device)
     downConv2 = nn.Linear(1024, 128, 1).to(device)
     
@@ -200,9 +180,9 @@ def pair_tune(source_model_path, train_generator, tune_dataset, batch_size=72, n
             inputs = torch.from_numpy(inputs)
             labels = torch.from_numpy(labels)
             inputs=Variable(inputs, requires_grad=True)
-            labels=Variable(labels, requires_grad=True)
+            #labels=Variable(labels, requires_grad=True)
             inputs = inputs.to(device)
-            labels = labels.to(device)
+            #labels = labels.to(device)
             
             
             # zero the parameter gradients
@@ -237,7 +217,8 @@ def pair_tune(source_model_path, train_generator, tune_dataset, batch_size=72, n
         #epoch_loss = running_loss / inputs.size(0)
 
         #print('Loss: {:.4f}'.format(epoch_loss))
-
+        if epoch%10 == 0:
+            torch.save(model, "./snapshot/market_model"+str(epoch)+".h5")
         time_elapsed = time.time() - since
         print('Training complete in {:.0f}m {:.0f}s'.format(
             time_elapsed // 60, time_elapsed % 60))

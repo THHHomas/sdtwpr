@@ -57,8 +57,8 @@ def triplet_hard_loss(y_pred, f):
     feat1 = y_pred.unsqueeze(0).repeat(feat_num,1,1)
     feat2 = y_pred.unsqueeze(1).repeat(1,feat_num,1)
     delta = feat1 - feat2
-    dis_mat = t.sum(delta**2, 2)/2# + 1e-16 # Avoid gradients becoming NAN
-    #dis_mat = t.sqrt(dis_mat)
+    dis_mat = t.sum(delta**2, 2)*1000000+float(np.finfo(np.float32).eps) # Avoid gradients becoming NAN
+    dis_mat = t.sqrt(dis_mat)/1000
     
     positive = dis_mat[0:SN,0:SN]
     negative = dis_mat[0:SN,SN:]
@@ -74,7 +74,7 @@ def triplet_hard_loss(y_pred, f):
     #positive = K.print_tensor(positive)
     #a1 = t.Tensor([1.2]).to("cuda")
     #print(positive, negative)
-    x=relu(positive-negative+1.0)
+    x=relu(positive-negative+0.6)
     loss = t.mean(x)
     f.write(str(loss))
     return loss
@@ -195,7 +195,7 @@ def ec_distance(feature):
     input1 = input1.repeat(Num, 1,1)
     input2 = input2.repeat(1, Num, 1)
     subRes = (input1 - input2)**2
-    res =t.sqrt(1e-16 +  t.sum(subRes, 2))
+    res = t.sum(subRes, 2)/2
     return res
 
 def l2_norm(feature):
@@ -231,7 +231,7 @@ def hard_sdtw_triplet(feature, f):
         positive[i,:] = Distance[i, (i//SN)*SN:(i//SN)*SN+SN]
     negetive = t.min(negetive,1)[0]
     positive = t.max(positive,1)[0]
-    x=relu(positive-negetive+1.0)
+    x=relu(positive-negetive+1.2)
     loss = t.mean(x)
     return loss
 

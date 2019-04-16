@@ -97,6 +97,11 @@ def extract_feature(dir_path, net):
     print("in extract feature:----------------------------------------------------------------- ")
     features = []
     infos = []
+    x_axis = np.linspace(0, 2 * np.pi, 2048)
+    start_i = 0
+    end_i = 50
+    count  = 0
+    plot_arr = []
     for image_name in sorted(os.listdir(dir_path)):
 
         if '.jpg' not in image_name:
@@ -126,9 +131,6 @@ def extract_feature(dir_path, net):
 
         x= t.Tensor(np.transpose(x,(0,3,1,2))).to("cuda")
         feature = net(x)
-        #y_ =t.sqrt(t.sum(feature**2, 1)).unsqueeze(1)
-        #feature = feature/y_
-        
         #feature = avgpool(feature)
         #feature = feature.view(feature.size(0), -1)
         feature = feature.cpu().detach().numpy()
@@ -139,13 +141,24 @@ def extract_feature(dir_path, net):
         #print(feature[0].shape)
         #feature = np.concatenate(feature,axis = 1)
         #print(feature.shape)
-	        
-
+        
         feature = np.mean(feature, axis=0)
+        
         #print("feature.shpae: ",feature.shape)
         features.append(np.squeeze(feature))
         infos.append((person, camera))
+        count = count + 1
+        if count > start_i and count < end_i:
+            plot_arr.append(feature)
+        if count>end_i:
+            break
+
         #print(feature.shape,np.max(feature))
+    plt.plot(x_axis, plot_arr[0], 'r')
+    plt.plot(x_axis, plot_arr[44], 'b')
+    #plt.plot(x_axis, plot_arr[2], 'g')
+    plt.show()
+
     return features, infos
 
 
