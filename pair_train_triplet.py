@@ -140,8 +140,11 @@ def adjust_learning_rate(optimizer, epoch):
     for param_group in optimizer.param_groups:
         if epoch< 70:
             param_group['lr'] = 3e-4
-        else:
+        elif epoch < 90:
             param_group['lr']=3e-5
+        else :
+            param_group['lr']=1e-5
+            
 
 def pair_tune(source_model_path, train_generator, tune_dataset, batch_size=72, num_classes=751):
     global PN
@@ -151,14 +154,14 @@ def pair_tune(source_model_path, train_generator, tune_dataset, batch_size=72, n
     model.to(device)
     #model = torch.load("./source_market_model.h5")
 
-    num_epochs = 90
+    num_epochs = 110
     batch_size = PN*SN
 
     f=open("./log.txt", "w")
     learning_rate = 3e-4
     optimizer = torch.optim.Adam(model.parameters(), betas=(0.9, 0.999),weight_decay = 0, lr=learning_rate)
     downConv1 = nn.Linear(2048, 1024, 1).to(device)
-    downConv2 = nn.Linear(1024, 128, 1).to(device)
+    downConv2 = nn.Linear(1024, 384, 1).to(device)
     
     bn = nn.BatchNorm1d(1024).to(device)
     best_loss = 100.0
