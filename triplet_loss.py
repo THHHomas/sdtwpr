@@ -7,8 +7,8 @@ from torch.autograd import Variable
 import torch.nn.functional as F
 import os
 
-SN = 6 # the number of images in a class
-PN = 12
+SN = 3 # the number of images in a class
+PN = 18
 relu = nn.ReLU(inplace=False)
 device=t.device("cuda")
 avgpool = nn.AdaptiveAvgPool2d((1, 1))
@@ -45,7 +45,7 @@ def triplet_hard_loss(y_true, y_pred):
     return loss
 '''
 
-def triplet_hard_loss(y_true, y_pred):
+def triplet_hard_loss(y_pred, f):
     global SN  # the number of images in a class
     global PN  # the number of class
     feat_num = SN*PN # images num
@@ -57,23 +57,26 @@ def triplet_hard_loss(y_true, y_pred):
     feat1 = y_pred.unsqueeze(0).repeat(feat_num,1,1)
     feat2 = y_pred.unsqueeze(1).repeat(1,feat_num,1)
     delta = feat1 - feat2
-    dis_mat = t.sum(delta**2, 2) + np.finfo(np.float32).eps # Avoid gradients becoming NAN
-    dis_mat = t.sqrt(dis_mat)
+    dis_mat = t.sum(delta**2, 2)/2# + 1e-16 # Avoid gradients becoming NAN
+    #dis_mat = t.sqrt(dis_mat)
+    
     positive = dis_mat[0:SN,0:SN]
-    negetive = dis_mat[0:SN,SN:]
+    negative = dis_mat[0:SN,SN:]
     for i in range(1,PN):
         positive = t.cat([positive,dis_mat[i*SN:(i+1)*SN,i*SN:(i+1)*SN]], 0)
         if i != PN-1:
             negs = t.cat([dis_mat[i*SN:(i+1)*SN,0:i*SN],dis_mat[i*SN:(i+1)*SN, (i+1)*SN:]], 1)
         else:
             negs = dis_mat[i*SN:(i+1)*SN, 0:i*SN]#np.concatenate(dis_mat[i*SN:(i+1)*SN, 0:i*SN],axis = 0)
-        negetive = t.cat([negetive,negs], 0)
+        negative = t.cat([negative,negs], 0)
     positive = t.max(positive,1)[0]
-    negetive = t.min(negetive,1)[0]
+    negative = t.min(negative,1)[0]
     #positive = K.print_tensor(positive)
     #a1 = t.Tensor([1.2]).to("cuda")
-    x=relu(positive-negetive+1.2)
+    #print(positive, negative)
+    x=relu(positive-negative+1.0)
     loss = t.mean(x)
+    f.write(str(loss))
     return loss
 
 
@@ -91,7 +94,7 @@ def data_pre(feature):
     for i in range(Num):
         D = t.zeros((Num*F_DIM, DIM , DIM )).to(device)
         for j in range(Num):
-            dis =t.sqrt(relu(2*(1- t.bmm(feature[i,:,:,:],t.transpose(feature[j,:,:,:], 1,2) ))))
+            dis =t.sqrt(float(np.finfo(np.float32).eps)+relu(2*(1- t.bmm(feature[i,:,:,:],t.transpose(feature[j,:,:,:], 1,2) ))))
             '''input1 = feature[i,:,:,:].unsqueeze(1)
             input2 = feature[j,:,:,:].unsqueeze(2)
             input1 = input1.repeat(1, 12,1,1)
@@ -174,7 +177,7 @@ def compute_softdtw(D):
             R[:,i, j] = D[:, i - 1, j - 1] + softmin
     return R[:,-2,-2]
 '''
-
+dropout = nn.Dropout(0.5)
 def ec_distance(feature):
 
     feature = avgpool(feature)
@@ -182,6 +185,7 @@ def ec_distance(feature):
     y_ =t.sqrt(t.sum(feature**2, 1)).unsqueeze(1)
     #print( np.mean(np.square(y-y_) , axis=1) )
     feature = feature/y_
+    #feature = dropout(feature)
 
     #print(t.sqrt(t.sum(feature**2, 1)))
     Num = feature.shape[0]
@@ -210,9 +214,11 @@ def hard_sdtw_triplet(feature, f):
     ##print(feature[0,0:2,:,:])
     ##print(t.norm(feature, dim = 3, p=2)) 
     Distance = data_pre(feature)
+    #
+    #Distance = data_pre(feature)
     
     ##Euclidean Distance
-    #Distance = ec_distance(feature)
+    Distance = ec_distance(feature)
     ##print(Distance.shape, Distance)
     log = Distance[0,0:12].cpu().detach().numpy()
     f.write(str(log.tolist()))
@@ -225,7 +231,8 @@ def hard_sdtw_triplet(feature, f):
         positive[i,:] = Distance[i, (i//SN)*SN:(i//SN)*SN+SN]
     negetive = t.min(negetive,1)[0]
     positive = t.max(positive,1)[0]
-    x=relu(positive-negetive+1.5)
+
+    x=relu(positive-negetive+0.8)
     loss = t.mean(x)
     return loss
 
@@ -240,12 +247,14 @@ def calD(s1,s2):
 
 
 if __name__ == '__main__':
-    os.environ['CUDA_VISIBLE_DEVICES']="1"
-    since = time.time()
-    y_pred = t.ones(PN*SN,64,12,4).to(device)
+    os.environ['CUDA_VISIBLE_DEVICES']="0"
+    f=open("test.txt", "w")
+    
+    y_pred = t.ones(PN*SN,128,12,4).to(device)
     y_pred[0,0,0,0] = 1000
     y_pred=Variable(y_pred, requires_grad=True)
-    loss = hard_sdtw_triplet(y_pred)
+    since = time.time()
+    loss = hard_sdtw_triplet(y_pred, f)
     '''s1 = [1,2,3,4,5,5,5,4]
     s2 = [1,3,5,4,4,4,4, 1]
     D = calD(s1,s2)

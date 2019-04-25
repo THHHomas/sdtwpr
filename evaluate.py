@@ -1,5 +1,6 @@
 import torch
 import torch as t
+import torch.nn as nn
 import os
 import cv2
 
@@ -13,10 +14,12 @@ from utils.file_helper import write, safe_remove
 import numpy as np
 
 from pair_train import load_and_process, input_shape
+avgpool = nn.AdaptiveAvgPool2d((1, 1))
+    
 
 def test_pair_predict(pair_model_path, target_probe_path, target_gallery_path, pid_path, score_path):
     # todo
-    model = torch.load(pair_model_path)
+    model = torch.load(pair_model_path).eval()
     test_predict(model, target_probe_path, target_gallery_path, pid_path, score_path)
     '''y_pred=Variable(y_pred, requires_grad=True)
 
@@ -121,7 +124,10 @@ def extract_feature(dir_path, net):
         '''
 
         x= t.Tensor(np.transpose(x,(0,3,1,2))).to("cuda")
-        feature = net(x).cpu().detach().numpy()
+        feature = net(x)
+        #feature = avgpool(feature)
+        #feature = feature.view(feature.size(0), -1)
+        feature = feature.cpu().detach().numpy()
         #print(feature.shape)
         #feature[0]=np.squeeze(feature[0])
         #print(feature[0].shape, feature[1].shape)
@@ -129,6 +135,7 @@ def extract_feature(dir_path, net):
         #print(feature[0].shape)
         #feature = np.concatenate(feature,axis = 1)
         #print(feature.shape)
+        
         feature = np.mean(feature, axis=0)
         #print("feature.shpae: ",feature.shape)
         features.append(np.squeeze(feature))
@@ -273,7 +280,7 @@ def market_result_eval(predict_path, log_path='market_result_eval.log', TEST='Ma
     write(log_path, '%f\t%f\n' % (rank1, mAP))
 
 if __name__ == '__main__':
-    os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+    os.environ["CUDA_VISIBLE_DEVICES"] = "0"
     market_eval('market', '../dataset/Market-1501-v15.09.15')
     market_result_eval('market_market_pid.log',
                             TEST='../dataset/Market-1501-v15.09.15/bounding_box_test',

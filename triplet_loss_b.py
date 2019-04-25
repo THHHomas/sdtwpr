@@ -225,7 +225,11 @@ def hard_sdtw_triplet(feature, f):
         positive[i,:] = Distance[i, (i//SN)*SN:(i//SN)*SN+SN]
     negetive = t.min(negetive,1)[0]
     positive = t.max(positive,1)[0]
+<<<<<<< HEAD
     x=relu(positive-negetive+1.5)
+=======
+    x=relu(positive-negetive+2)
+>>>>>>> 2b7be8e527e0a250102d150736ae6a66ad10ab48
     loss = t.mean(x)
     return loss
 
@@ -237,15 +241,62 @@ def calD(s1,s2):
     D[1,:,:]=D[0,:,:]
     D[2,:,:]=D[0,:,:]
     return D
+<<<<<<< HEAD
+=======
+
+
+def triplet_hard_loss(y_true, y_pred):
+    global SN  # the number of images in a class
+    global PN  # the number of class
+    feat_num = SN*PN # images num
+    #y=np.linalg.norm(y_pred, axis=1, keepdims=True)
+    y_ =t.sqrt(t.sum(y_pred**2, 1)).unsqueeze(1)
+    #print( np.mean(np.square(y-y_) , axis=1) )
+    y_pred = y_pred/y_
+
+    feat1 = y_pred.unsqueeze(0).repeat(feat_num,1,1)
+    feat2 = y_pred.unsqueeze(1).repeat(1,feat_num,1)
+    delta = feat1 - feat2
+    dis_mat = t.sum(delta**2, 2) + np.finfo(np.float32).eps # Avoid gradients becoming NAN
+    dis_mat = t.sqrt(dis_mat)
+    positive = dis_mat[0:SN,0:SN]
+    negetive = dis_mat[0:SN,SN:]
+    for i in range(1,PN):
+        positive = t.cat([positive,dis_mat[i*SN:(i+1)*SN,i*SN:(i+1)*SN]], 0)
+        if i != PN-1:
+            negs = t.cat([dis_mat[i*SN:(i+1)*SN,0:i*SN],dis_mat[i*SN:(i+1)*SN, (i+1)*SN:]], 1)
+        else:
+            negs = dis_mat[i*SN:(i+1)*SN, 0:i*SN]#np.concatenate(dis_mat[i*SN:(i+1)*SN, 0:i*SN],axis = 0)
+        negetive = t.cat([negetive,negs], 0)
+    positive = t.max(positive,1)[0]
+    negetive = t.min(negetive,1)[0]
+    #positive = K.print_tensor(positive)
+    #a1 = t.Tensor([1.2]).to("cuda")
+    x=relu(positive-negetive+1.2)
+    loss = t.mean(x)
+    return loss
+>>>>>>> 2b7be8e527e0a250102d150736ae6a66ad10ab48
 
 
 if __name__ == '__main__':
-    os.environ['CUDA_VISIBLE_DEVICES']="1"
+    os.environ['CUDA_VISIBLE_DEVICES']="0"
+    f=open("tttt.txt","w")
     since = time.time()
+<<<<<<< HEAD
     y_pred = t.ones(PN*SN,64,12,4).to(device)
     y_pred[0,0,0,0] = 1000
     y_pred=Variable(y_pred, requires_grad=True)
     loss = hard_sdtw_triplet(y_pred)
+=======
+    y_pred = t.ones(PN*SN,128,12,4).to(device)
+    y_pred[0,0,0,0] = 1000
+
+    y_pred=Variable(y_pred, requires_grad=True)
+    #y_pred = avgpool(y_pred)
+    #y_pred =y_pred.squeeze()
+    loss = hard_sdtw_triplet(y_pred, f)
+    #loss = triplet_hard_loss(y_pred,y_pred)
+>>>>>>> 2b7be8e527e0a250102d150736ae6a66ad10ab48
     '''s1 = [1,2,3,4,5,5,5,4]
     s2 = [1,3,5,4,4,4,4, 1]
     D = calD(s1,s2)
