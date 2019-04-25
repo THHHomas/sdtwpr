@@ -5,18 +5,13 @@ import os
 import cv2
 import matplotlib.pyplot as plt
 
-from keras.preprocessing import image
-import tensorflow as tf
-from keras.applications.resnet50 import preprocess_input
-from keras.backend.tensorflow_backend import set_session
-
 from utils.file_helper import write, safe_remove
 
 import numpy as np
 
 from pair_train import load_and_process, input_shape
 avgpool = nn.AdaptiveAvgPool2d((1, 1))
-    
+device=t.device("cuda")
 
 def test_pair_predict(pair_model_path, target_probe_path, target_gallery_path, pid_path, score_path):
     # todo
@@ -170,7 +165,7 @@ def extract_info(dir_path):
 
     return infos
 
-
+'''
 def similarity_matrix(query_f, test_f):
     # Tensorflow graph
     # use GPU to calculate the similarity matrix
@@ -187,6 +182,18 @@ def similarity_matrix(query_f, test_f):
 
     result = sess.run(tensor, {query_t: query_f, test_t: test_f})
     tf.reset_default_graph()
+    # descend
+    return result
+'''
+
+def similarity_matrix(query_f, test_f):
+    query_f = t.from_numpy(np.array(query_f)).to(device)
+    test_f = t.from_numpy(np.array(test_f)).to(device)
+    query_f = query_f/t.norm(query_f, dim=1).unsqueeze(1)
+    test_f = test_f/t.norm(test_f, dim=1).unsqueeze(1)
+    
+    result = t.mm(query_f, test_f.t()).cpu().numpy()
+    
     # descend
     return result
 

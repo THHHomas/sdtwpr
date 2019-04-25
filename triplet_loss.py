@@ -7,8 +7,8 @@ from torch.autograd import Variable
 import torch.nn.functional as F
 import os
 
-SN = 4 # the number of images in a class
-PN = 18
+SN = 6 # the number of images in a class
+PN = 12
 relu = nn.ReLU(inplace=False)
 device=t.device("cuda")
 avgpool = nn.AdaptiveAvgPool2d((1, 1))
