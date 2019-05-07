@@ -9,6 +9,7 @@ import os
 
 SN = 3 # the number of images in a class
 PN = 18
+
 relu = nn.ReLU(inplace=False)
 device=t.device("cuda")
 avgpool = nn.AdaptiveAvgPool2d((1, 1))
@@ -57,8 +58,8 @@ def triplet_hard_loss(y_pred, f):
     feat1 = y_pred.unsqueeze(0).repeat(feat_num,1,1)
     feat2 = y_pred.unsqueeze(1).repeat(1,feat_num,1)
     delta = feat1 - feat2
-    dis_mat = t.sum(delta**2, 2)/2# + 1e-16 # Avoid gradients becoming NAN
-    #dis_mat = t.sqrt(dis_mat)
+    dis_mat = t.sum(delta**2, 2)*1000000+float(np.finfo(np.float32).eps) # Avoid gradients becoming NAN
+    dis_mat = t.sqrt(dis_mat)/1000
     
     positive = dis_mat[0:SN,0:SN]
     negative = dis_mat[0:SN,SN:]
@@ -74,7 +75,7 @@ def triplet_hard_loss(y_pred, f):
     #positive = K.print_tensor(positive)
     #a1 = t.Tensor([1.2]).to("cuda")
     #print(positive, negative)
-    x=relu(positive-negative+1.0)
+    x=relu(positive-negative+0.6)
     loss = t.mean(x)
     f.write(str(loss))
     return loss
@@ -106,7 +107,7 @@ def data_pre(feature):
             D[j*F_DIM:(j+1)*F_DIM,:,:] = dis
 
         #print(t.max(D), t.min(D))
-        R = compute_softdtw(D)
+        R = compute_localmatch(D)
         Distance[Num*i*F_DIM: Num*(i+1)*F_DIM] = R
     Distance = t.reshape(Distance, (Num,Num, F_DIM ))
     Distance = t.mean(Distance,2)
@@ -149,11 +150,113 @@ def compute_softdtw(D):
             #print("predis", pre_dis)
             #print("rmin", pre_dis)
             R[:,i, j] =  D[:, i-1, j-1] + pre_dis
-    row = R[:, -1, :]
-    col = R[:,:, -1]
+    row = R[:, -1, 6:]
+    col = R[:,6:, -1]
     rc = t.cat((row, col),1)
     #print("rcmin", t.min(rc,1))
-    res = t.min(rc,1)[0] #
+    temp =  t.min(rc,1)
+    res =temp[0] #
+    #print("row",temp[1][0:30], temp[1].shape)
+    #res = R[:, -1, -1]
+    return res
+
+
+
+def compute_localmatch(D):
+    ###batch DTW
+    ### D with shape (N, W, W), N is the batch size, W is the length of squence
+    gamma = 0.1
+    NUM = D.shape[0]
+    DIM = D.shape[1]
+    R = t.zeros((NUM, DIM + 1, DIM + 1)).to(device) + 1e8
+    R_path_i = t.zeros((NUM, DIM+1 , DIM+1 ), dtype = t.uint8).to(device) 
+    R_path_j = t.zeros((NUM, DIM +1, DIM + 1), dtype = t.uint8).to(device) 
+
+    R[:, 0, 0] = 0
+    R_path_i[:, 0, 0] = 1
+    R_path_j[:, 0, 0] = 1
+    for i in range(1, DIM + 1):
+        R_path_i[:, i, 1] = i
+        R_path_i[:, 1, i] = 1
+        R_path_j[:, 1, i] = i
+        R_path_j[:, i, 1] = 1
+
+
+    tolabel = t.zeros((NUM,3), dtype=t.uint8).to(device) 
+    tolabel[:,1] = tolabel[:,1] + 1
+    tolabel[:,2] = tolabel[:,2] + 2
+
+    nature = [x for x in range(NUM)]
+    zeros = [0 for x in range(NUM)]
+    for j in range(1, DIM + 1):
+        for i in range(1, DIM + 1):
+            index = [[[i - 1, j - 1],[i - 1, j],[i, j - 1]]]
+            #index_i = [i, i-1, i-1]
+            #index_j = [j-1, j-1, j]
+            index = t.Tensor(index)
+            #index = index.repeat(NUM,1,1)
+            r0 = R[:,i - 1, j - 1] 
+            r1 = R[:,i - 1, j] 
+            r2 = R[:,i, j - 1]
+            #rmin = -maximum(maximum(-r0, -r1), -r2)
+            r0 = t.unsqueeze(r0, 0)
+            r1 = t.unsqueeze(r1, 0)
+            r2 = t.unsqueeze(r2, 0)
+            r = t.cat((r0, r1, r2), 0)
+            r = t.transpose(r, 0,1)
+            r0_map = (r1>=r0)*(r2>=r0)
+            r1_map = (r0>r1)*(r2>=r1)
+            r2_map = (r0>r2)*(r1>r2)
+            r_map = t.cat((r0_map, r1_map, r2_map), 0)
+            r_map = t.transpose(r_map, 0,1)
+
+            label = t.sum(r_map*tolabel, 1).tolist()
+            In = index[zeros, label]
+            #print(label)
+            #print(In[:][0])
+            if i> 1 and j> 1:
+                R_path_i[:,i,j] = R_path_i[nature, In[:,0].tolist(), In[:,1].tolist()]
+                R_path_j[:,i,j] = R_path_j[nature, In[:,0].tolist(), In[:,1].tolist()]
+
+            #print(label)
+            #rmin = -maximum(maximum(-r0, -r1), -r2)
+            #rmax = maximum(maximum(r0, r1), r2)
+            #rsum = t.exp(r0 - rmax) + t.exp(r1 - rmax) + t.exp(r2 - rmax)
+            #softmin = - gamma * (t.log(rsum) + rmax)
+            #print(r[0:10])
+            pre_dis = t.masked_select(r, r_map)
+
+            #print(pre_dis[0:10])
+            #print("predis", pre_dis)
+            #print("rmin", pre_dis)
+            R[:,i, j] =  D[:, i-1, j-1] + pre_dis
+
+    row = R[:, -1, 6:]
+    col = R[:,6:, -1]
+    rc = t.cat((row, col),1)
+
+    row_i = R_path_i[:, -1, 6:]
+    col_i = R_path_i[:,6:, -1]
+    rc_i = t.cat((row_i, row_i),1)
+
+    row_j = R_path_j[:, -1, 6:]
+    col_j = R_path_j[:,6:, -1]
+    rc_j = t.cat((row_j, row_j),1)
+    #print("rcmin", t.min(rc,1))
+    temp =  t.min(rc,1)
+    res =temp[0] #
+
+    index = temp[1].tolist()
+
+    index_i = (rc_i[nature, index]).tolist()
+    index_j = (rc_j[nature, index]).tolist()
+    #print(index_i)
+    #print(index_j)
+    res = res - R[nature, index_i, index_j]
+    #print(res.shape, R.shape)
+    #print(temp[1])
+    #print("row",temp[1][0:30], temp[1].shape)
+    #res = R[:, -1, -1]
     return res
 
 '''
@@ -195,7 +298,7 @@ def ec_distance(feature):
     input1 = input1.repeat(Num, 1,1)
     input2 = input2.repeat(1, Num, 1)
     subRes = (input1 - input2)**2
-    res =t.sqrt(1e-16 +  t.sum(subRes, 2))
+    res = t.sum(subRes, 2)/2
     return res
 
 def l2_norm(feature):
@@ -231,8 +334,8 @@ def hard_sdtw_triplet(feature, f):
         positive[i,:] = Distance[i, (i//SN)*SN:(i//SN)*SN+SN]
     negetive = t.min(negetive,1)[0]
     positive = t.max(positive,1)[0]
+    x=relu(positive-negetive+0.6)
 
-    x=relu(positive-negetive+0.8)
     loss = t.mean(x)
     return loss
 
@@ -247,7 +350,7 @@ def calD(s1,s2):
 
 
 if __name__ == '__main__':
-    os.environ['CUDA_VISIBLE_DEVICES']="0"
+    os.environ['CUDA_VISIBLE_DEVICES']="1"
     f=open("test.txt", "w")
     
     y_pred = t.ones(PN*SN,128,12,4).to(device)
@@ -272,3 +375,4 @@ if __name__ == '__main__':
 
 
 
+    

@@ -1,4 +1,5 @@
 *.h5
 *.log
 *.pyc
+snapshot
 __pycache__

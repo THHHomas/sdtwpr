@@ -70,9 +70,11 @@ def reid_data_prepare(data_list_path, train_dir_path):
 
 def load_and_process(pre_image):
     img = cv2.imread(pre_image)
-    img = cv2.resize(img, (input_shape[1], input_shape[0]))
+    img = cv2.resize(img, (input_shape[1]+28, input_shape[0]+84))
 
-    
+    rand_height = np.random.randint(0,28*3)
+    rand_width = np.random.randint(0,28)
+    img = img[rand_height:rand_height+384, rand_width:rand_width+128,:]
 
     img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
     img = img/255.0
@@ -114,15 +116,18 @@ def triplet_hard_generator(class_img_labels, batch_size, train=False):
                 cv2.waitKey(1000)
                 '''
                 img = load_and_process(pre_image).astype(np.float32)
-                
 
-                
                 #img=random_crop(img, 224)
                 
                 #img = preprocess_input(img)[0]
                 
                 if random.random()>0.5:
                     img = img[:,::-1,:]
+                #cv2.imshow("pre", img)
+                #cv2.waitKey(1000)
+
+                #pre_images.append(img)
+
                 pre_images.append(img)
 	#print(pre_label)
         label=np.array([pre_label for i in range(SN)])
@@ -158,7 +163,7 @@ def pair_tune(source_model_path, train_generator, tune_dataset, batch_size=72, n
 
     f=open("./log.txt", "w")
     learning_rate = 1e-4
-    optimizer = torch.optim.Adam(model.parameters(), betas=(0.9, 0.999), lr=learning_rate)
+    optimizer = torch.optim.Adam(model.parameters(), betas=(0.9, 0.999), weight_decay = 0, lr=learning_rate)
     downConv1 = nn.Conv2d(2048, 1024, 1).to(device)
     downConv2 = nn.Conv2d(1024, 256, 1).to(device)
     
@@ -294,7 +299,7 @@ def pair_pretrain_on_dataset(source, project_path='.', dataset_parent='../datase
 if __name__ == '__main__':
     sources = ['market']
 
-    os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+    os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
     #os.environ["CUDA_VISIBLE_DEVICES"] = "1"
     #sources = ['cuhk', 'viper', 'market','duke']
