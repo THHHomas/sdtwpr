@@ -124,8 +124,8 @@ def extract_feature(dir_path, net):
         #y_ =t.sqrt(t.sum(feature**2, 1)).unsqueeze(1)
         #feature = feature/y_
         
-        #feature = avgpool(feature)
-        #feature = feature.view(feature.size(0), -1)
+        feature = avgpool(feature)
+        feature = feature.view(feature.size(0), -1)
         feature = feature.cpu().detach().numpy()
         #print(feature.shape)
         #feature[0]=np.squeeze(feature[0])
@@ -292,7 +292,7 @@ def market_result_eval(predict_path, log_path='market_result_eval.log', TEST='Ma
     write(log_path, '%f\t%f\n' % (rank1, mAP))
 
 if __name__ == '__main__':
-    os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+    os.environ["CUDA_VISIBLE_DEVICES"] = "1"
     market_eval('market', '../dataset/Market-1501-v15.09.15')
     market_result_eval('market_market_pid.log',
                             TEST='../dataset/Market-1501-v15.09.15/bounding_box_test',

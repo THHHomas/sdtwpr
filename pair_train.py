@@ -15,9 +15,9 @@ from numpy.random import randint, shuffle, choice, permutation
 
 
 batch_num=0
-SN = 4 # the number of images in a class
+SN = 3 # the number of images in a class
 PN = 18
-input_shape=(256,128,3)
+input_shape=(384,128,3)
 
 
 def mix_data_prepare(data_list_path, train_dir_path):
@@ -70,9 +70,11 @@ def reid_data_prepare(data_list_path, train_dir_path):
 
 def load_and_process(pre_image):
     img = cv2.imread(pre_image)
-    img = cv2.resize(img, (input_shape[1], input_shape[0]))
+    img = cv2.resize(img, (input_shape[1]+28, input_shape[0]+84))
 
-    
+    rand_height = np.random.randint(0,28*3)
+    rand_width = np.random.randint(0,28)
+    img = img[rand_height:rand_height+384, rand_width:rand_width+128,:]
 
     img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
     img = img/255.0
@@ -114,15 +116,18 @@ def triplet_hard_generator(class_img_labels, batch_size, train=False):
                 cv2.waitKey(1000)
                 '''
                 img = load_and_process(pre_image).astype(np.float32)
-                
 
-                
                 #img=random_crop(img, 224)
                 
                 #img = preprocess_input(img)[0]
                 
-                #if random.random()>0.5:
-                #    img = img[:,::-1,:]
+                if random.random()>0.5:
+                    img = img[:,::-1,:]
+                #cv2.imshow("pre", img)
+                #cv2.waitKey(1000)
+
+                #pre_images.append(img)
+
                 pre_images.append(img)
 	#print(pre_label)
         label=np.array([pre_label for i in range(SN)])
@@ -138,12 +143,12 @@ def triplet_hard_generator(class_img_labels, batch_size, train=False):
 def adjust_learning_rate(optimizer, epoch):
     """Sets the learning rate to the initial LR decayed by 10 every 30 epochs"""
     for param_group in optimizer.param_groups:
-        if epoch< 60:
-            param_group['lr'] = 3e-4#$param_group['lr']*(0.1 ** (epoch // 30))
-        elif epoch < 80:
-            param_group['lr']=1e-4
-        else:
+        if epoch< 70:
+            param_group['lr'] = 1e-4#$param_group['lr']*(0.1 ** (epoch // 30))
+        elif epoch < 90:
             param_group['lr']=3e-5
+        else:
+            param_group['lr']=1e-5
 
 def pair_tune(source_model_path, train_generator, tune_dataset, batch_size=72, num_classes=751):
     global PN
@@ -153,17 +158,17 @@ def pair_tune(source_model_path, train_generator, tune_dataset, batch_size=72, n
     model.to(device)
     #model = torch.load("./source_market_model.h5")
 
-    num_epochs = 110
+    num_epochs = 100
     batch_size = PN*SN
 
     f=open("./log.txt", "w")
-    learning_rate = 3e-4
-    optimizer = torch.optim.Adam(model.parameters(), betas=(0.9, 0.999), lr=learning_rate)
+    learning_rate = 1e-4
+    optimizer = torch.optim.Adam(model.parameters(), betas=(0.9, 0.999), weight_decay = 0, lr=learning_rate)
     downConv1 = nn.Conv2d(2048, 1024, 1).to(device)
-    downConv2 = nn.Conv2d(1024, 128, 1).to(device)
+    downConv2 = nn.Conv2d(1024, 256, 1).to(device)
     
     bn = nn.BatchNorm2d(1024).to(device)
-    bn2 = nn.BatchNorm2d(128).to(device)
+    bn2 = nn.BatchNorm2d(256).to(device)
     for epoch in range(num_epochs):
         print('Epoch {}/{}'.format(epoch, num_epochs ))
         since = time.time()
@@ -198,7 +203,7 @@ def pair_tune(source_model_path, train_generator, tune_dataset, batch_size=72, n
                 outputs =  downConv1(outputs)
                 outputs = bn(outputs)
                 outputs =  downConv2(outputs)
-                #outputs = bn2(outputs)
+                outputs = bn2(outputs)
                 #print(outputs.shape)
                 loss = hard_sdtw_triplet(outputs, f)
 		
@@ -223,6 +228,8 @@ def pair_tune(source_model_path, train_generator, tune_dataset, batch_size=72, n
         time_elapsed = time.time() - since
         print('Training complete in {:.0f}m {:.0f}s'.format(
             time_elapsed // 60, time_elapsed % 60))
+        if epoch%10 == 0:
+            torch.save(model, "./snapshot/market_model"+str(epoch)+".h5")
     f.close()
     torch.save(model, "./market_model.h5")
     return model
@@ -291,6 +298,9 @@ def pair_pretrain_on_dataset(source, project_path='.', dataset_parent='../datase
 
 if __name__ == '__main__':
     sources = ['market']
+
+    os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+
     #os.environ["CUDA_VISIBLE_DEVICES"] = "1"
     #sources = ['cuhk', 'viper', 'market','duke']
     for source in sources:

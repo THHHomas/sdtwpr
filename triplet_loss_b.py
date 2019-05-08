@@ -225,7 +225,11 @@ def hard_sdtw_triplet(feature, f):
         positive[i,:] = Distance[i, (i//SN)*SN:(i//SN)*SN+SN]
     negetive = t.min(negetive,1)[0]
     positive = t.max(positive,1)[0]
+<<<<<<< HEAD
+    x=relu(positive-negetive+1.5)
+=======
     x=relu(positive-negetive+2)
+>>>>>>> 2b7be8e527e0a250102d150736ae6a66ad10ab48
     loss = t.mean(x)
     return loss
 
@@ -237,6 +241,8 @@ def calD(s1,s2):
     D[1,:,:]=D[0,:,:]
     D[2,:,:]=D[0,:,:]
     return D
+<<<<<<< HEAD
+=======
 
 
 def triplet_hard_loss(y_true, y_pred):
@@ -269,12 +275,19 @@ def triplet_hard_loss(y_true, y_pred):
     x=relu(positive-negetive+1.2)
     loss = t.mean(x)
     return loss
+>>>>>>> 2b7be8e527e0a250102d150736ae6a66ad10ab48
 
 
 if __name__ == '__main__':
     os.environ['CUDA_VISIBLE_DEVICES']="0"
     f=open("tttt.txt","w")
     since = time.time()
+<<<<<<< HEAD
+    y_pred = t.ones(PN*SN,64,12,4).to(device)
+    y_pred[0,0,0,0] = 1000
+    y_pred=Variable(y_pred, requires_grad=True)
+    loss = hard_sdtw_triplet(y_pred)
+=======
     y_pred = t.ones(PN*SN,128,12,4).to(device)
     y_pred[0,0,0,0] = 1000
 
@@ -283,6 +296,7 @@ if __name__ == '__main__':
     #y_pred =y_pred.squeeze()
     loss = hard_sdtw_triplet(y_pred, f)
     #loss = triplet_hard_loss(y_pred,y_pred)
+>>>>>>> 2b7be8e527e0a250102d150736ae6a66ad10ab48
     '''s1 = [1,2,3,4,5,5,5,4]
     s2 = [1,3,5,4,4,4,4, 1]
     D = calD(s1,s2)

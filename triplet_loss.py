@@ -169,9 +169,10 @@ def compute_localmatch(D):
     NUM = D.shape[0]
     DIM = D.shape[1]
     R = t.zeros((NUM, DIM + 1, DIM + 1)).to(device) + 1e8
+    
+
     R_path_i = t.zeros((NUM, DIM+1 , DIM+1 ), dtype = t.uint8).to(device) 
     R_path_j = t.zeros((NUM, DIM +1, DIM + 1), dtype = t.uint8).to(device) 
-
     R[:, 0, 0] = 0
     R_path_i[:, 0, 0] = 1
     R_path_j[:, 0, 0] = 1
