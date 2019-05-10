@@ -201,7 +201,7 @@ def pair_tune(source_model_path, train_generator, tune_dataset, batch_size=72, n
                 outputs =  downConv2(outputs)
                 #outputs = bn2(outputs)
                 #print(outputs.shape)
-                loss = triplet_hard_loss(outputs,f)
+                loss = triplet_hard_loss(outputs,f, epoch)
                 
                 # backward + optimize only if in training phase
                 loss.backward()

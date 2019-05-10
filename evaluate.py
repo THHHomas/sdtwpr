@@ -292,7 +292,7 @@ def market_result_eval(predict_path, log_path='market_result_eval.log', TEST='Ma
     write(log_path, '%f\t%f\n' % (rank1, mAP))
 
 if __name__ == '__main__':
-    os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+    os.environ["CUDA_VISIBLE_DEVICES"] = "1"
     market_eval('market', '../dataset/Market-1501-v15.09.15')
     market_result_eval('market_market_pid.log',
                             TEST='../dataset/Market-1501-v15.09.15/bounding_box_test',

@@ -107,7 +107,7 @@ def data_pre(feature):
             D[j*F_DIM:(j+1)*F_DIM,:,:] = dis
 
         #print(t.max(D), t.min(D))
-        R = compute_softdtw(D)
+        R = compute_localmatch(D)
         Distance[Num*i*F_DIM: Num*(i+1)*F_DIM] = R
     Distance = t.reshape(Distance, (Num,Num, F_DIM ))
     Distance = t.mean(Distance,2)
@@ -150,14 +150,120 @@ def compute_softdtw(D):
             #print("predis", pre_dis)
             #print("rmin", pre_dis)
             R[:,i, j] =  D[:, i-1, j-1] + pre_dis
-    row = R[:, -1, :]
-    col = R[:,:, -1]
+    row = R[:, -1, 6:]
+    col = R[:,6:, -1]
     rc = t.cat((row, col),1)
     #print("rcmin", t.min(rc,1))
     temp =  t.min(rc,1)
     res =temp[0] #
     #print("row",temp[1][0:30], temp[1].shape)
     #res = R[:, -1, -1]
+    return res
+
+
+
+def compute_localmatch(D):
+    ###batch DTW
+    ### D with shape (N, W, W), N is the batch size, W is the length of squence
+    gamma = 0.1
+    NUM = D.shape[0]
+    DIM = D.shape[1]
+    R = t.zeros((NUM, DIM + 1, DIM + 1)).to(device) + 1e8
+    
+
+    R_path_i = t.zeros((NUM, DIM+1 , DIM+1 ), dtype = t.uint8).to(device) 
+    R_path_j = t.zeros((NUM, DIM +1, DIM + 1), dtype = t.uint8).to(device) 
+    R[:, 0, 0] = 0
+    R_path_i[:, 0, 0] = 1
+    R_path_j[:, 0, 0] = 1
+    for i in range(1, DIM + 1):
+        R_path_i[:, i, 1] = i
+        R_path_i[:, 1, i] = 1
+        R_path_j[:, 1, i] = i
+        R_path_j[:, i, 1] = 1
+
+    R_path_i = R_path_i.reshape((R_path_i.shape[0], -1))
+    R_path_j = R_path_i.reshape((R_path_j.shape[0], -1))
+
+    tolabel = t.zeros((NUM,3), dtype=t.uint8).to(device) 
+    tolabel[:,1] = tolabel[:,1] + 1
+    tolabel[:,2] = tolabel[:,2] + 2
+
+    nature = [x for x in range(NUM)]
+    zeros = [0 for x in range(NUM)]
+    for j in range(1, DIM + 1):
+        for i in range(1, DIM + 1):
+            index = [[[i - 1, j - 1],[i - 1, j],[i, j - 1]]]
+            #index_i = [i, i-1, i-1]
+            #index_j = [j-1, j-1, j]
+            index = t.Tensor(index).to(device) 
+            #index = index.repeat(NUM,1,1)
+            r0 = R[:,i - 1, j - 1] 
+            r1 = R[:,i - 1, j] 
+            r2 = R[:,i, j - 1]
+            #rmin = -maximum(maximum(-r0, -r1), -r2)
+            r0 = t.unsqueeze(r0, 0)
+            r1 = t.unsqueeze(r1, 0)
+            r2 = t.unsqueeze(r2, 0)
+            r = t.cat((r0, r1, r2), 0)
+            r = t.transpose(r, 0,1)
+            r0_map = (r1>=r0)*(r2>=r0)
+            r1_map = (r0>r1)*(r2>=r1)
+            r2_map = (r0>r2)*(r1>r2)
+            r_map = t.cat((r0_map, r1_map, r2_map), 0)
+            r_map = t.transpose(r_map, 0,1)
+
+            label = t.sum(r_map*tolabel, 1).tolist()
+
+            In = index[zeros, label]
+            Index = In[:,0]*(DIM +1)+In[:,1]
+            Index = Index.unsqueeze(1).long()
+
+            #R_path_i.gather(0,In)
+            #print(R_path_i.shape, t.index_select(R_path_i, 1, In[:,0]).shape)
+            #In_a = In[:,0].tolist()
+            #In_b = In[:,1].tolist()
+            #print(label)
+            #print(In[:][0])
+            
+            
+            if i> 1 and j> 1:
+
+                R_path_i[:,i*(DIM+1)+j] =  t.gather(R_path_i, 1, Index).squeeze()
+                R_path_j[:,i*(DIM+1)+j] =  t.gather(R_path_j, 1, Index).squeeze()
+                #R_path_j[:,i, j] = R_path_j[nature, In[:,0].tolist(), In[:,1].tolist()]
+
+            #print(label)
+            #rmin = -maximum(maximum(-r0, -r1), -r2)
+            #rmax = maximum(maximum(r0, r1), r2)
+            #rsum = t.exp(r0 - rmax) + t.exp(r1 - rmax) + t.exp(r2 - rmax)
+            #softmin = - gamma * (t.log(rsum) + rmax)
+            #print(r[0:10])
+            pre_dis = t.masked_select(r, r_map)
+
+            #print(pre_dis[0:10])
+            #print("predis", pre_dis)
+            #print("rmin", pre_dis)
+            R[:,i, j] =  D[:, i-1, j-1] + pre_dis
+
+
+    R_path_i = R_path_i.reshape((R_path_i.shape[0], (DIM+1),(DIM+1)))
+    R_path_j = R_path_i.reshape((R_path_j.shape[0], (DIM+1),(DIM+1)))
+
+    row = R[:, -1, 6:]
+    col = R[:,6:, -1]
+    rc = t.cat((row, col),1)
+
+    row_i = R_path_i[:, -1, 6:]
+    col_i = R_path_i[:,6:, -1]
+    rc_i = t.cat((row_i, row_i),1)
+
+    row_j = R_path_j[:, -1, 6:]
+    col_j = R_path_j[:,6:, -1]
+    rc_j = t.cat((row_j, row_j),1)
+    #print("rcmin", t.min(rc,1))
+    temp =  t.min(rc,1)
+    res =temp[0] #
     return res
 
 
@@ -253,6 +359,21 @@ def compute_localmatch(D):
     #print(index_i)
     #print(index_j)
     res = res - R[nature, index_i, index_j]
+=======
+
+    index = temp[1].unsqueeze(1).long()
+    #index = temp[1].unqueeze(1).long()
+
+    index_i = t.gather(rc_i, 1, index).squeeze()   #(rc_i[nature, index]).tolist()
+    index_j = t.gather(rc_j, 1, index).squeeze()  #(rc_j[nature, index]).tolist()
+    #print(index_i)
+    #print(index_j)
+    R=R.reshape((R.shape[0], -1))
+    index = (index_i*(DIM+1)+ index_j).unsqueeze(1).long()
+
+
+    res = res - t.gather(R, 1, index).squeeze()#R[nature, index_i, index_j]
+>>>>>>> c8146f968d53f2144ab88917aa69d7978eaf6424
     #print(res.shape, R.shape)
     #print(temp[1])
     #print("row",temp[1][0:30], temp[1].shape)
@@ -375,3 +496,4 @@ if __name__ == '__main__':
 
 
 
+    

@@ -315,7 +315,7 @@ def pair_pretrain_on_dataset(source, project_path='.', dataset_parent='../datase
 if __name__ == '__main__':
     sources = ['market']
 
-    os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+    os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
     #os.environ["CUDA_VISIBLE_DEVICES"] = "1"
     #sources = ['cuhk', 'viper', 'market','duke']
