@@ -9,6 +9,7 @@ from triplet_loss import hard_sdtw_triplet
 from torch.autograd import Variable
 
 import cv2
+from PIL import Image
 
 from numpy.random import randint, shuffle, choice, permutation
 
@@ -68,11 +69,20 @@ def reid_data_prepare(data_list_path, train_dir_path):
 
     return class_img_labels
 
+data_transform=transforms.Compose([
+                    transforms.RandomHorizontalFlip(),
+                    transforms.Resize((input_shape[0], input_shape[1])),
+                    transforms.ToTensor(),
+                    transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+                    ])
+
 def load_and_process(pre_image):
     img = cv2.imread(pre_image)
-    img = cv2.resize(img, (input_shape[1], input_shape[0]))
+    img = cv2.resize(img, (input_shape[1]+28, input_shape[0]+84))
 
-    
+    rand_height = np.random.randint(0,28*3)
+    rand_width = np.random.randint(0,28)
+    img = img[rand_height:rand_height+384, rand_width:rand_width+128,:]
 
     img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
     img = img/255.0
@@ -81,6 +91,14 @@ def load_and_process(pre_image):
     img = img/np.array([0.229, 0.224, 0.225])
 
     return img
+'''
+def load_and_process(pre_image):
+    img = Image.open(pre_image)
+    img = data_transform(img).numpy()
+
+    img = np.transpose(img,(1,2,0))
+    return img
+'''
 
 #def random_crop(image, crop_size):
 #    w=np.random.randint(256-crop_size)   
@@ -114,15 +132,18 @@ def triplet_hard_generator(class_img_labels, batch_size, train=False):
                 cv2.waitKey(1000)
                 '''
                 img = load_and_process(pre_image).astype(np.float32)
-                
 
-                
                 #img=random_crop(img, 224)
                 
                 #img = preprocess_input(img)[0]
                 
                 if random.random()>0.5:
                     img = img[:,::-1,:]
+                #cv2.imshow("pre", img)
+                #cv2.waitKey(1000)
+
+                #pre_images.append(img)
+
                 pre_images.append(img)
 	#print(pre_label)
         label=np.array([pre_label for i in range(SN)])
@@ -158,7 +179,7 @@ def pair_tune(source_model_path, train_generator, tune_dataset, batch_size=72, n
 
     f=open("./log.txt", "w")
     learning_rate = 1e-4
-    optimizer = torch.optim.Adam(model.parameters(), betas=(0.9, 0.999), lr=learning_rate)
+    optimizer = torch.optim.Adam(model.parameters(), betas=(0.9, 0.999), weight_decay = 0, lr=learning_rate)
     downConv1 = nn.Conv2d(2048, 1024, 1).to(device)
     downConv2 = nn.Conv2d(1024, 256, 1).to(device)
     

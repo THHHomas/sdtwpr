@@ -5,13 +5,18 @@ import os
 import cv2
 import matplotlib.pyplot as plt
 
+from keras.preprocessing import image
+import tensorflow as tf
+from keras.applications.resnet50 import preprocess_input
+from keras.backend.tensorflow_backend import set_session
+
 from utils.file_helper import write, safe_remove
 
 import numpy as np
 
 from pair_train import load_and_process, input_shape
 avgpool = nn.AdaptiveAvgPool2d((1, 1))
-device=t.device("cuda")
+    
 
 def test_pair_predict(pair_model_path, target_probe_path, target_gallery_path, pid_path, score_path):
     # todo
@@ -92,6 +97,11 @@ def extract_feature(dir_path, net):
     print("in extract feature:----------------------------------------------------------------- ")
     features = []
     infos = []
+    x_axis = np.linspace(0, 2 * np.pi, 2048)
+    start_i = 0
+    end_i = 50
+    count  = 0
+    plot_arr = []
     for image_name in sorted(os.listdir(dir_path)):
 
         if '.jpg' not in image_name:
@@ -121,11 +131,8 @@ def extract_feature(dir_path, net):
 
         x= t.Tensor(np.transpose(x,(0,3,1,2))).to("cuda")
         feature = net(x)
-        #y_ =t.sqrt(t.sum(feature**2, 1)).unsqueeze(1)
-        #feature = feature/y_
-        
-        feature = avgpool(feature)
-        feature = feature.view(feature.size(0), -1)
+        #feature = avgpool(feature)
+        #feature = feature.view(feature.size(0), -1)
         feature = feature.cpu().detach().numpy()
         #print(feature.shape)
         #feature[0]=np.squeeze(feature[0])
@@ -134,13 +141,24 @@ def extract_feature(dir_path, net):
         #print(feature[0].shape)
         #feature = np.concatenate(feature,axis = 1)
         #print(feature.shape)
-	        
-
+        
         feature = np.mean(feature, axis=0)
+        
         #print("feature.shpae: ",feature.shape)
         features.append(np.squeeze(feature))
         infos.append((person, camera))
+        count = count + 1
+        if count > start_i and count < end_i:
+            plot_arr.append(feature)
+        if count>end_i:
+            break
+
         #print(feature.shape,np.max(feature))
+    plt.plot(x_axis, plot_arr[0], 'r')
+    plt.plot(x_axis, plot_arr[44], 'b')
+    #plt.plot(x_axis, plot_arr[2], 'g')
+    plt.show()
+
     return features, infos
 
 
@@ -165,7 +183,7 @@ def extract_info(dir_path):
 
     return infos
 
-'''
+
 def similarity_matrix(query_f, test_f):
     # Tensorflow graph
     # use GPU to calculate the similarity matrix
@@ -182,18 +200,6 @@ def similarity_matrix(query_f, test_f):
 
     result = sess.run(tensor, {query_t: query_f, test_t: test_f})
     tf.reset_default_graph()
-    # descend
-    return result
-'''
-
-def similarity_matrix(query_f, test_f):
-    query_f = t.from_numpy(np.array(query_f)).to(device)
-    test_f = t.from_numpy(np.array(test_f)).to(device)
-    query_f = query_f/t.norm(query_f, dim=1).unsqueeze(1)
-    test_f = test_f/t.norm(test_f, dim=1).unsqueeze(1)
-    
-    result = t.mm(query_f, test_f.t()).cpu().numpy()
-    
     # descend
     return result
 
