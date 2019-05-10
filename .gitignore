@@ -1,4 +1,5 @@
 *.h5
+log.txt
 *.log
 *.pyc
 snapshot
