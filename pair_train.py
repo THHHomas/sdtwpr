@@ -7,7 +7,7 @@ import time
 from resnet import resnet50
 from triplet_loss import hard_sdtw_triplet
 from torch.autograd import Variable
-
+from torchvision   import transforms
 import cv2
 from PIL import Image
 
@@ -75,14 +75,14 @@ data_transform=transforms.Compose([
                     transforms.ToTensor(),
                     transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
                     ])
-
+'''
 def load_and_process(pre_image):
     img = cv2.imread(pre_image)
-    img = cv2.resize(img, (input_shape[1]+28, input_shape[0]+84))
+    img = cv2.resize(img, (input_shape[1], input_shape[0]))
 
-    rand_height = np.random.randint(0,28*3)
-    rand_width = np.random.randint(0,28)
-    img = img[rand_height:rand_height+384, rand_width:rand_width+128,:]
+    #rand_height = np.random.randint(0,28*3)
+    #rand_width = np.random.randint(0,28)
+    #img = img[rand_height:rand_height+384, rand_width:rand_width+128,:]
 
     img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
     img = img/255.0
@@ -98,7 +98,7 @@ def load_and_process(pre_image):
 
     img = np.transpose(img,(1,2,0))
     return img
-'''
+
 
 #def random_crop(image, crop_size):
 #    w=np.random.randint(256-crop_size)   
@@ -137,8 +137,8 @@ def triplet_hard_generator(class_img_labels, batch_size, train=False):
                 
                 #img = preprocess_input(img)[0]
                 
-                if random.random()>0.5:
-                    img = img[:,::-1,:]
+                #if random.random()>0.5:
+                #    img = img[:,::-1,:]
                 #cv2.imshow("pre", img)
                 #cv2.waitKey(1000)
 
@@ -160,7 +160,7 @@ def adjust_learning_rate(optimizer, epoch):
     """Sets the learning rate to the initial LR decayed by 10 every 30 epochs"""
     for param_group in optimizer.param_groups:
         if epoch< 70:
-            param_group['lr'] = 1e-4#$param_group['lr']*(0.1 ** (epoch // 30))
+            param_group['lr'] = 3e-4#$param_group['lr']*(0.1 ** (epoch // 30))
         elif epoch < 90:
             param_group['lr']=3e-5
         else:
@@ -315,7 +315,7 @@ def pair_pretrain_on_dataset(source, project_path='.', dataset_parent='../datase
 if __name__ == '__main__':
     sources = ['market']
 
-    os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+    os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
     #os.environ["CUDA_VISIBLE_DEVICES"] = "1"
     #sources = ['cuhk', 'viper', 'market','duke']
